@@ -57,6 +57,11 @@ export class CreateSandboxDto {
   @Matches(/^\d+[mg]$/i, { message: 'Memory must be in format like 512m or 2g' })
   memoryLimit?: string;
 
+  @ApiPropertyOptional({ example: '10g', default: '10g', description: 'Disk limit' })
+  @IsOptional()
+  @IsString()
+  diskLimit?: string;
+
   @ApiPropertyOptional({
     example: { '8080': '8080', '3000': '3000' },
     description: 'Port mappings (container:host)',
@@ -174,4 +179,13 @@ export class ExecResultDto {
 
   @ApiProperty()
   stderr!: string;
+}
+
+export class RunPythonDto {
+  @ApiProperty({
+    example: 'import pandas as pd\nprint("Hello from AI Agent")',
+    description: 'Python code to execute natively inside the sandbox',
+  })
+  @IsString()
+  code!: string;
 }

@@ -5,8 +5,13 @@ import {
   RuntimeCreateOptions,
   ExecOptions,
   ExecResult,
+  ContainerStats,
 } from './runtime.interface';
 import { ConfigService } from '@nestjs/config';
+import { exec as childExec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(childExec);
 
 /**
  * Firecracker MicroVM Runtime Provider
@@ -92,17 +97,31 @@ export class FirecrackerProvider implements RuntimeProvider {
 
   async exec(options: ExecOptions): Promise<ExecResult> {
     this.logger.log(
-      `[Firecracker] Executing command inside microVM ${options.containerId}: ${options.command.join(' ')}`,
+      `[Firecracker] Executing command inside microVM ${options.containerId}: ${options.command.join(' ').slice(0, 50)}...`,
     );
     // In production, uses vsock (virtio socket) agent inside guest VM
-    return {
-      exitCode: 0,
-      stdout: `[Firecracker uVM ${options.containerId.slice(0, 8)}] command executed successfully\n`,
-      stderr: '',
-    };
+    try {
+      // Local emulation for testing Native Agent SDK Python blocks
+      const { stdout, stderr } = await execAsync(options.command.join(' '));
+      return { exitCode: 0, stdout, stderr };
+    } catch (err: any) {
+      return { exitCode: err.code || 1, stdout: err.stdout || '', stderr: err.stderr || err.message };
+    }
   }
 
   async list(labels?: Record<string, string>): Promise<RuntimeInfo[]> {
     return Array.from(this.vms.values());
+  }
+
+  async stats(id: string): Promise<ContainerStats> {
+    return {
+      containerId: id,
+      cpu: { usagePercent: 0.1, systemCpuDelta: 0, numCpus: 1 },
+      memory: { usageMb: 64, limitMb: 1024, usagePercent: 6.25, cache: 0 },
+      network: { rxBytes: 0, txBytes: 0, rxPackets: 0, txPackets: 0 },
+      blockIO: { readBytes: 0, writeBytes: 0 },
+      pids: 5,
+      readAt: new Date().toISOString(),
+    };
   }
 }

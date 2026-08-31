@@ -53,3 +53,4 @@ __pycache__/
 # Misc
 *.tsbuildinfo
 .eslintcache
+quarkbox.db

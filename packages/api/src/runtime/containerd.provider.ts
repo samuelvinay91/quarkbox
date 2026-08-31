@@ -77,6 +77,18 @@ export class ContainerdProvider implements RuntimeProvider {
     return this.containers.get(id) || null;
   }
 
+  async stats(id: string): Promise<import('./runtime.interface').ContainerStats> {
+    return {
+      containerId: id,
+      cpu: { usagePercent: 0.1, systemCpuDelta: 0, numCpus: 1 },
+      memory: { usageMb: 64, limitMb: 1024, usagePercent: 6.25, cache: 0 },
+      network: { rxBytes: 0, txBytes: 0, rxPackets: 0, txPackets: 0 },
+      blockIO: { readBytes: 0, writeBytes: 0 },
+      pids: 5,
+      readAt: new Date().toISOString(),
+    };
+  }
+
   async exec(options: ExecOptions): Promise<ExecResult> {
     this.logger.log(
       `[containerd] ctr tasks exec ${options.containerId}: ${options.command.join(' ')}`,

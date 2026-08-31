@@ -33,16 +33,12 @@ import { ProxyModule } from './proxy/proxy.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres' as const,
-        host: config.get<string>('DATABASE_HOST', 'localhost'),
-        port: config.get<number>('DATABASE_PORT', 5432),
-        username: config.get<string>('DATABASE_USER', 'quarkbox'),
-        password: config.get<string>('DATABASE_PASSWORD', 'quarkbox_dev'),
-        database: config.get<string>('DATABASE_NAME', 'quarkbox'),
+      useFactory: (config: ConfigService): import('@nestjs/typeorm').TypeOrmModuleOptions => ({
+        type: 'better-sqlite3',
+        database: 'quarkbox.db',
         entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster],
-        synchronize: config.get<string>('NODE_ENV') === 'development',
-        logging: config.get<string>('NODE_ENV') === 'development',
+        synchronize: true,
+        logging: false,
       }),
     }),
 

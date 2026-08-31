@@ -134,9 +134,6 @@ export class MockRuntimeProvider implements RuntimeProvider {
     });
   }
 
-  async healthCheck(): Promise<boolean> {
-    return true;
-  }
 
   async stats(containerId: string): Promise<import('./runtime.interface').ContainerStats> {
     // Return simulated but structurally accurate metrics

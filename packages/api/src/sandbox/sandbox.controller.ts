@@ -25,6 +25,7 @@ import {
   SandboxResponseDto,
   ExecCommandDto,
   ExecResultDto,
+  RunPythonDto,
 } from './dto';
 
 @ApiTags('sandboxes')
@@ -130,6 +131,20 @@ export class SandboxController {
     @Body() dto: ExecCommandDto,
   ) {
     return this.sandboxService.exec(id, dto.command, dto.workdir);
+  }
+
+  // ── Agent SDK ───────────────────────────────────────────────────────
+
+  @Post(':id/run-python')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Execute a Python code block natively (Agent SDK)' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 200, type: ExecResultDto })
+  async runPython(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RunPythonDto,
+  ) {
+    return this.sandboxService.runPython(id, dto.code);
   }
 
   // ── Deep Metrics ──────────────────────────────────────────────────

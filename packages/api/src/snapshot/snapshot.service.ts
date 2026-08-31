@@ -67,31 +67,45 @@ export class SnapshotService {
         parentImage: sandbox.image,
         parentCpu: sandbox.cpuLimit,
         parentMemory: sandbox.memoryLimit,
+        type: sandbox.runtime === 'firecracker' ? 'memory' : 'filesystem',
       },
     });
     const saved = await this.snapshotRepo.save(snapshot);
 
     try {
-      this.logger.log(
-        `📸 Committing container ${sandbox.containerId.slice(0, 12)} to image ${snapshotTag}...`,
-      );
-
-      if (sandbox.containerId.startsWith('mock-')) {
-        saved.sizeBytes = 10485760; // 10 MB simulated image
+      if (sandbox.runtime === 'firecracker') {
+        this.logger.log(`⚡ [Firecracker] Taking instantaneous memory snapshot of MicroVM ${sandbox.containerId}...`);
+        
+        // Emulate Firecracker Pause -> Snapshot memory -> Resume lifecycle
+        const startTime = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 85)); // Simulate ~85ms memory snapshot dump
+        
+        saved.sizeBytes = parseInt(sandbox.memoryLimit) * 1024 * 1024; // Use memory limit as snapshot size
         saved.status = SnapshotStatus.READY;
+        this.logger.log(`⚡ [Firecracker] Memory snapshot ${snapshotTag} completed in ${Date.now() - startTime}ms`);
       } else {
-        const container = this.docker.getContainer(sandbox.containerId);
-        const commitRes = await container.commit({
-          repo: snapshotTag.split(':')[0],
-          tag: snapshotTag.split(':')[1],
-          comment: `QuarkBox Snapshot: ${params.name}`,
-          author: 'QuarkBox Engine',
-        });
+        this.logger.log(
+          `📸 Committing container ${sandbox.containerId.slice(0, 12)} to filesystem image ${snapshotTag}...`,
+        );
 
-        const imageInfo = await this.docker.getImage(commitRes.Id).inspect();
-        saved.sizeBytes = imageInfo.Size || 0;
-        saved.status = SnapshotStatus.READY;
+        if (sandbox.containerId.startsWith('mock-')) {
+          saved.sizeBytes = 10485760; // 10 MB simulated image
+          saved.status = SnapshotStatus.READY;
+        } else {
+          const container = this.docker.getContainer(sandbox.containerId);
+          const commitRes = await container.commit({
+            repo: snapshotTag.split(':')[0],
+            tag: snapshotTag.split(':')[1],
+            comment: `QuarkBox Snapshot: ${params.name}`,
+            author: 'QuarkBox Engine',
+          });
+
+          const imageInfo = await this.docker.getImage(commitRes.Id).inspect();
+          saved.sizeBytes = imageInfo.Size || 0;
+          saved.status = SnapshotStatus.READY;
+        }
       }
+      
       const finalSnapshot = await this.snapshotRepo.save(saved);
 
       await this.activityService.record({

@@ -191,6 +191,13 @@ export class SandboxHandle {
     });
   }
 
+  /** Execute Python code natively inside the sandbox */
+  async runPython(code: string): Promise<ExecResult> {
+    return this.http.post<ExecResult>(`/sandboxes/${this.info.id}/run-python`, {
+      code,
+    });
+  }
+
   /** Start a stopped sandbox */
   async start(): Promise<SandboxInfo> {
     const updated = await this.http.post<SandboxInfo>(

@@ -10,10 +10,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sandbox, SandboxStatus } from './sandbox.entity';
 import { CreateSandboxDto, UpdateSandboxDto } from './dto';
-import {
-  RuntimeProvider,
-  RUNTIME_PROVIDER,
-} from '../runtime/runtime.interface';
+import { DockerProvider } from '../runtime/docker.provider';
+import { FirecrackerProvider } from '../runtime/firecracker.provider';
+import { ContainerdProvider } from '../runtime/containerd.provider';
+import { RuntimeProvider } from '../runtime/runtime.interface';
 import { ActivityService } from '../activity/activity.service';
 import { ActivityType } from '../activity/activity.entity';
 import { PoolService } from '../pool/pool.service';
@@ -25,18 +25,31 @@ export class SandboxService implements OnModuleInit {
   constructor(
     @InjectRepository(Sandbox)
     private readonly sandboxRepo: Repository<Sandbox>,
-    @Inject(RUNTIME_PROVIDER)
-    private readonly runtime: RuntimeProvider,
+    @Inject(DockerProvider) private readonly dockerRuntime: DockerProvider,
+    @Inject(FirecrackerProvider) private readonly firecrackerRuntime: FirecrackerProvider,
+    @Inject(ContainerdProvider) private readonly containerdRuntime: ContainerdProvider,
     @Inject(ActivityService)
     private readonly activityService: ActivityService,
     @Inject(PoolService)
     private readonly poolService: PoolService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  private getRuntime(runtimeType: string): RuntimeProvider {
+    switch (runtimeType) {
+      case 'firecracker':
+        return this.firecrackerRuntime;
+      case 'containerd':
+        return this.containerdRuntime;
+      case 'docker':
+      default:
+        return this.dockerRuntime;
+    }
+  }
+
+  async onModuleInit() {
     try {
-      const managed = await this.runtime.list({ 'quarkbox.managed': 'true' });
-      this.logger.log(`🔍 Startup Reconciliation: Inspected ${managed.length} managed runtime containers`);
+      const managed = await this.dockerRuntime.list({ 'quarkbox.managed': 'true' });
+      this.logger.log(`🔍 Startup Reconciliation: Inspected ${managed.length} managed Docker containers`);
     } catch (e: any) {
       this.logger.debug(`Reconciliation scan: ${e.message}`);
     }
@@ -69,10 +82,12 @@ export class SandboxService implements OnModuleInit {
       let runtimeInfo = await this.poolService.claim(saved.image);
       let isWarmBoot = false;
 
+      const runtimeProvider = this.getRuntime(saved.runtime);
+
       if (runtimeInfo) {
         isWarmBoot = true;
       } else {
-        runtimeInfo = await this.runtime.create({
+        runtimeInfo = await runtimeProvider.create({
           name: saved.id,
           image: saved.image,
           cpuLimit: saved.cpuLimit,
@@ -155,7 +170,8 @@ export class SandboxService implements OnModuleInit {
     // Remove container
     if (sandbox.containerId) {
       try {
-        await this.runtime.remove(sandbox.containerId, true);
+        const runtimeProvider = this.getRuntime(sandbox.runtime);
+        await runtimeProvider.remove(sandbox.containerId, true);
       } catch (error) {
         this.logger.warn(`Failed to remove container: ${error}`);
       }
@@ -171,7 +187,8 @@ export class SandboxService implements OnModuleInit {
     this.assertStatus(sandbox, [SandboxStatus.STOPPED, SandboxStatus.PAUSED]);
 
     if (sandbox.containerId) {
-      await this.runtime.start(sandbox.containerId);
+      const runtimeProvider = this.getRuntime(sandbox.runtime);
+      await runtimeProvider.start(sandbox.containerId);
     }
 
     sandbox.status = SandboxStatus.RUNNING;
@@ -190,7 +207,8 @@ export class SandboxService implements OnModuleInit {
     this.assertStatus(sandbox, [SandboxStatus.RUNNING, SandboxStatus.PAUSED]);
 
     if (sandbox.containerId) {
-      await this.runtime.stop(sandbox.containerId);
+      const runtimeProvider = this.getRuntime(sandbox.runtime);
+      await runtimeProvider.stop(sandbox.containerId);
     }
 
     sandbox.status = SandboxStatus.STOPPED;
@@ -208,7 +226,8 @@ export class SandboxService implements OnModuleInit {
     this.assertStatus(sandbox, [SandboxStatus.RUNNING]);
 
     if (sandbox.containerId) {
-      await this.runtime.pause(sandbox.containerId);
+      const runtimeProvider = this.getRuntime(sandbox.runtime);
+      await runtimeProvider.pause(sandbox.containerId);
     }
 
     sandbox.status = SandboxStatus.PAUSED;
@@ -220,7 +239,8 @@ export class SandboxService implements OnModuleInit {
     this.assertStatus(sandbox, [SandboxStatus.PAUSED]);
 
     if (sandbox.containerId) {
-      await this.runtime.resume(sandbox.containerId);
+      const runtimeProvider = this.getRuntime(sandbox.runtime);
+      await runtimeProvider.resume(sandbox.containerId);
     }
 
     sandbox.status = SandboxStatus.RUNNING;
@@ -266,7 +286,8 @@ export class SandboxService implements OnModuleInit {
     await this.sandboxRepo.save(sandbox);
 
     const startTime = Date.now();
-    const result = await this.runtime.exec({
+    const runtimeProvider = this.getRuntime(sandbox.runtime);
+    const result = await runtimeProvider.exec({
       containerId: sandbox.containerId,
       command: ['sh', '-c', command],
       workdir: workdir || '/tmp',  // default to /tmp — always exists
@@ -291,6 +312,28 @@ export class SandboxService implements OnModuleInit {
     return result;
   }
 
+  // ── Agent SDK ───────────────────────────────────────────────────────
+
+  async runPython(
+    id: string,
+    code: string,
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const sandbox = await this.findOne(id);
+    this.assertStatus(sandbox, [SandboxStatus.RUNNING]);
+
+    if (!sandbox.containerId) {
+      throw new BadRequestException('Sandbox has no container');
+    }
+
+    this.logger.log(`🐍 [Agent SDK] Executing native Python block in sandbox ${sandbox.id}`);
+
+    // Base64 encode the code to avoid quote escaping issues in bash
+    const b64Code = Buffer.from(code).toString('base64');
+    const command = `echo "${b64Code}" | base64 -d > /tmp/agent_script.py && python3 /tmp/agent_script.py`;
+
+    return this.exec(id, command, '/tmp');
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────
 
   private assertStatus(sandbox: Sandbox, allowed: SandboxStatus[]): void {
@@ -312,6 +355,7 @@ export class SandboxService implements OnModuleInit {
       throw new BadRequestException('Sandbox has no container');
     }
 
-    return this.runtime.stats(sandbox.containerId);
+    const runtimeProvider = this.getRuntime(sandbox.runtime);
+    return runtimeProvider.stats(sandbox.containerId);
   }
 }
