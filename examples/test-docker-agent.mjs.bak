@@ -1,4 +1,4 @@
-import { QuarkBox } from '../packages/sdk/dist/index.js';
+import { QuarkBox } from './packages/sdk/dist/index.js';
 import { resolve } from 'path';
 
 // Helper for colored console output

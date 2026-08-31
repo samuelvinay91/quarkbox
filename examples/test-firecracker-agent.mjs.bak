@@ -1,4 +1,4 @@
-import { QuarkBox } from '../packages/sdk/dist/index.js';
+import { QuarkBox } from './packages/sdk/dist/index.js';
 import { resolve } from 'path';
 
 // Helper for colored console output
@@ -16,16 +16,16 @@ async function runTests() {
 
   try {
     // 1. Provision Firecracker Sandbox
-    info('Provisioning a Docker Container Sandbox...');
+    info('Provisioning a Firecracker MicroVM Sandbox...');
     sandbox = await qb.sandboxes.create({
       name: 'ai-firecracker-agent',
       image: 'python:3.12-slim',
-      runtime: 'docker',
+      runtime: 'firecracker',
       cpuLimit: 4,
       memoryLimit: '2g',
     });
     
-    success(`Docker VM Created: ID ${sandbox.id} (Status: ${sandbox.status})`);
+    success(`Firecracker VM Created: ID ${sandbox.id} (Status: ${sandbox.status})`);
     
     // 2. Native Agent SDK: Python Block Execution
     info('Executing Native Python block via runPython SDK...');
@@ -52,7 +52,7 @@ print(json.dumps(data))
     log(`     ${result.stdout.trim()}`, '\x1b[33m');
 
     // 3. True Memory Snapshotting
-    info('Taking instantaneous Docker Guest Memory Snapshot...');
+    info('Taking instantaneous Firecracker Guest Memory Snapshot...');
     const startTime = Date.now();
     const snapshotRes = await fetch(`http://localhost:3000/api/snapshots/sandbox/${sandbox.id}`, {
       method: 'POST',
@@ -81,7 +81,7 @@ print(json.dumps(data))
   } finally {
     // Cleanup
     if (sandbox) {
-      info('Tearing down Docker Container...');
+      info('Tearing down Firecracker MicroVM...');
       await sandbox.remove().catch(() => {});
       success('Cleanup complete.');
     }
