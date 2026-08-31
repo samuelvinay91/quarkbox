@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quarkbox-postgres
+  labels:
+    app: quarkbox
+    component: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quarkbox
+      component: postgres
+  template:
+    metadata:
+      labels:
+        app: quarkbox
+        component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: quarkbox
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: quarkbox-secrets
+                  key: database-password
+            - name: POSTGRES_DB
+              value: quarkbox
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: quarkbox-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quarkbox-postgres
+spec:
+  selector:
+    app: quarkbox
+    component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: quarkbox-postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quarkbox-redis
+  labels:
+    app: quarkbox
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quarkbox
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: quarkbox
+        component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          command: ["redis-server", "--appendonly", "yes"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quarkbox-redis
+spec:
+  selector:
+    app: quarkbox
+    component: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

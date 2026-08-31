@@ -1,0 +1,81 @@
+# QuarkBox Helm Values
+
+global:
+  environment: production
+
+api:
+  replicaCount: 2
+  image:
+    repository: quarkbox/api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+
+dashboard:
+  replicaCount: 2
+  image:
+    repository: quarkbox/dashboard
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3001
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "quarkbox-api"
+  hosts:
+    - host: app.quarkbox.yourdomain.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /terminal
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: dashboard
+  tls:
+    - secretName: quarkbox-tls
+      hosts:
+        - app.quarkbox.yourdomain.com
+
+engine:
+  enableWarmPool: true
+  idleTimeoutSeconds: 1800
+  defaultRuntime: docker
+
+postgresql:
+  enabled: true
+  auth:
+    username: quarkbox
+    password: "quarkbox_secure_production_password"
+    database: quarkbox
+  persistence:
+    size: 20Gi
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false

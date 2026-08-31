@@ -1,0 +1,14 @@
+apiVersion: v2
+name: quarkbox
+description: Production Helm chart for QuarkBox Cloud Sandbox Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - sandbox
+  - cloud-development-environment
+  - ai-agents
+  - code-execution
+maintainers:
+  - name: QuarkBox Team
+    email: dev@quarkbox.dev

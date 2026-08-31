@@ -1,0 +1,25 @@
+{
+  "name": "@quarkbox/sdk",
+  "version": "0.1.0",
+  "description": "QuarkBox TypeScript SDK — Programmatic access to cloud sandboxes",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "echo 'lint placeholder'",
+    "test": "echo 'test placeholder'"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "quarkbox",
+    "sandbox",
+    "cloud",
+    "development-environment",
+    "ai-agent"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,21 @@
+{
+  "name": "quarkbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QuarkBox — Secure, elastic cloud sandbox platform for AI agents and developers",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker compose -f deploy/docker/docker-compose.yml up -d && npm run dev:api",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "dev:dashboard": "npm run dev --workspace=packages/dashboard",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

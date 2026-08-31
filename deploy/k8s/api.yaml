@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quarkbox-api
+  labels:
+    app: quarkbox
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quarkbox
+      component: api
+  template:
+    metadata:
+      labels:
+        app: quarkbox
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: quarkbox/api:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: quarkbox-secrets
+                  key: database-host
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: quarkbox-secrets
+                  key: database-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: quarkbox-secrets
+                  key: jwt-secret
+            - name: REDIS_HOST
+              value: quarkbox-redis
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quarkbox-api
+  labels:
+    app: quarkbox
+    component: api
+spec:
+  selector:
+    app: quarkbox
+    component: api
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: quarkbox-secrets
+type: Opaque
+stringData:
+  database-host: "quarkbox-postgres"
+  database-password: "change-me-in-production"
+  jwt-secret: "change-me-in-production"
