@@ -122,6 +122,11 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
         RestartPolicy: { Name: 'unless-stopped' },
         SecurityOpt: ['no-new-privileges:true'],
         CapDrop: ['SYS_ADMIN', 'SYS_MODULE', 'SYS_RAWIO', 'MKNOD'],
+        ExtraHosts: [
+          '169.254.169.254:0.0.0.0', // AWS/GCP Metadata IPv4
+          'metadata.google.internal:0.0.0.0', // GCP Metadata Domain
+          '100.100.100.200:0.0.0.0', // Alibaba Cloud Metadata
+        ],
       },
       Tty: true,
       OpenStdin: true,

@@ -101,8 +101,10 @@ export class FirecrackerProvider implements RuntimeProvider {
     );
     // In production, uses vsock (virtio socket) agent inside guest VM
     try {
-      // Local emulation for testing Native Agent SDK Python blocks
-      const { stdout, stderr } = await execAsync(options.command.join(' '));
+      // Secure local emulation: run inside an ephemeral, isolated Docker container
+      // instead of directly on the host API server to prevent host RCE.
+      const dockerCmd = `docker run --rm -i python:3.12-slim sh -c ${JSON.stringify(options.command.join(' '))}`;
+      const { stdout, stderr } = await execAsync(dockerCmd);
       return { exitCode: 0, stdout, stderr };
     } catch (err: any) {
       return { exitCode: err.code || 1, stdout: err.stdout || '', stderr: err.stderr || err.message };

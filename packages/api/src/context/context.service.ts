@@ -39,19 +39,23 @@ export class ContextService {
     options: GitInjectionOptions,
   ): Promise<{ stdout: string; exitCode: number }> {
     const sandbox = await this.sandboxService.findOne(sandboxId);
+    const bashEscape = (str: string) => "'" + str.replace(/'/g, "'\\''") + "'";
+
     const targetDir = options.targetDir || '/workspace';
-    const branchFlag = options.branch ? `-b ${options.branch}` : '';
+    const targetDirEscaped = bashEscape(targetDir);
+    const branchFlag = options.branch ? `-b ${bashEscape(options.branch)}` : '';
 
     let cloneUrl = options.repoUrl;
     if (options.authToken && options.repoUrl.startsWith('https://')) {
       const urlWithoutScheme = options.repoUrl.replace('https://', '');
       cloneUrl = `https://oauth2:${options.authToken}@${urlWithoutScheme}`;
     }
+    const cloneUrlEscaped = bashEscape(cloneUrl);
 
     const command = `if ! command -v git >/dev/null 2>&1; then ` +
       `if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq git; ` +
       `elif command -v apk >/dev/null 2>&1; then apk add --no-cache git; fi; fi && ` +
-      `mkdir -p "${targetDir}" && cd "${targetDir}" && if [ ! -d .git ]; then git clone --depth 1 ${branchFlag} "${cloneUrl}" .; else git pull; fi`;
+      `mkdir -p ${targetDirEscaped} && cd ${targetDirEscaped} && if [ ! -d .git ]; then git clone --depth 1 ${branchFlag} ${cloneUrlEscaped} .; else git pull; fi`;
 
     this.logger.log(
       `Injecting Git repo ${options.repoUrl} into sandbox ${sandbox.name}...`,

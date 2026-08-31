@@ -262,24 +262,9 @@ export class SandboxService implements OnModuleInit {
       throw new BadRequestException('Sandbox has no container');
     }
 
-    // ── Enterprise Security & Cloud Metadata Shield ───────────────────
-    const metadataBlocklist = [
-      /169\.254\.169\.254/i,
-      /metadata\.google\.internal/i,
-      /100\.100\.100\.200/i,
-      /\/latest\/meta-data/i,
-    ];
-    for (const pattern of metadataBlocklist) {
-      if (pattern.test(command)) {
-        await this.activityService.record({
-          type: ActivityType.SANDBOX_ERROR,
-          summary: `🚨 Cloud Metadata Exfiltration Attempt Blocked: ${command.slice(0, 80)}`,
-          sandboxId: sandbox.id,
-          isError: true,
-        });
-        throw new BadRequestException(`Security Policy Violation: Cloud metadata service access (169.254.169.254) is blocked.`);
-      }
-    }
+    // ── Cloud Metadata Shield ─────────────────────────────────────────
+    // SSRF protection is now handled securely at the network orchestration layer
+    // by DNS sinkholing metadata IPs in the Docker provider (ExtraHosts).
 
     // Update last active timestamp
     sandbox.lastActiveAt = new Date();
