@@ -36,10 +36,10 @@ jobs:
           echo "API is ready."
 
       - name: Run E2E Docker Live Container Test
-        run: node test-docker-agent.mjs
+        run: node examples/test-docker-agent.mjs
         
       - name: Run E2E Firecracker Architecture Test
-        run: node test-firecracker-agent.mjs
+        run: node examples/test-firecracker-agent.mjs
 
       - name: Upload API Logs on Failure
         if: failure()
