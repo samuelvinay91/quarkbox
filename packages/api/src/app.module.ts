@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SandboxModule } from './sandbox/sandbox.module';
@@ -20,6 +21,7 @@ import { GovernorModule } from './governor/governor.module';
 import { ContextModule } from './context/context.module';
 import { DevcontainerModule } from './devcontainer/devcontainer.module';
 import { ProxyModule } from './proxy/proxy.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -57,6 +59,12 @@ import { ProxyModule } from './proxy/proxy.module';
     ContextModule,
     DevcontainerModule,
     ProxyModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
   ],
 })
 export class AppModule {}

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "quarkbox.fullname" . }}-api
+  labels:
+    app.kubernetes.io/name: {{ include "quarkbox.name" . }}-api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "quarkbox.name" . }}-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "quarkbox.name" . }}-api
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}-api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: quarkbox-secrets
+                  key: jwt-secret
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}

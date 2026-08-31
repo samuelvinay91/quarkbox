@@ -1,6 +1,6 @@
 {
   "name": "quarkbox",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "QuarkBox — Secure, elastic cloud sandbox platform for AI agents and developers",
   "workspaces": [
@@ -12,7 +12,8 @@
     "dev:dashboard": "npm run dev --workspace=packages/dashboard",
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces",
-    "test": "npm run test --workspaces"
+    "test": "npm run test --workspaces",
+    "publish:all": "npm publish --workspaces --access public"
   },
   "engines": {
     "node": ">=20.0.0"

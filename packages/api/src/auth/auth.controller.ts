@@ -1,6 +1,7 @@
-import { Controller, Post, Get, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Get, HttpCode, HttpStatus, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { Public } from './public.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -11,6 +12,7 @@ export class AuthController {
    * Generate a dev token for local development and testing.
    * In production, this endpoint would be disabled.
    */
+  @Public()
   @Post('dev-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -39,6 +41,7 @@ export class AuthController {
   /**
    * Generate an API key for SDK/CLI access.
    */
+  @Public()
   @Post('api-key')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate an API key for programmatic access' })
@@ -55,6 +58,7 @@ export class AuthController {
     return this.authService.generateApiKey();
   }
 
+  @ApiBearerAuth()
   @Get('me')
   @ApiOperation({ summary: 'Get current user info' })
   @ApiResponse({
@@ -67,12 +71,11 @@ export class AuthController {
       },
     },
   })
-  getCurrentUser() {
-    // TODO: Extract from JWT once auth guard is active
+  getCurrentUser(@Request() req: any) {
     return {
-      id: 'dev-user',
-      email: 'dev@quarkbox.local',
-      name: 'Development User',
+      id: req.user?.userId || 'unknown',
+      email: req.user?.email || 'unknown',
+      name: req.user?.name || 'unknown',
     };
   }
 }

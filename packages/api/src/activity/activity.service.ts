@@ -38,6 +38,19 @@ export class ActivityService {
 
     const saved = await this.activityRepo.save(activity);
     this.logger.debug(`Activity recorded: ${params.type} — ${params.summary}`);
+
+    // SOC2 SIEM Export
+    try {
+      const fs = require('fs/promises');
+      const logEntry = JSON.stringify({
+        ...saved,
+        _siem_timestamp: new Date().toISOString(),
+      }) + '\n';
+      await fs.appendFile('/tmp/quarkbox-audit.ndjson', logEntry);
+    } catch (err: any) {
+      this.logger.error(`Failed to export audit log to SIEM file: ${err.message}`);
+    }
+
     return saved;
   }
 

@@ -37,6 +37,13 @@ export class TemplateController {
     private readonly templateService: TemplateService,
   ) {}
 
+  @Post()
+  @ApiOperation({ summary: 'Publish a custom environment template to the Marketplace' })
+  @ApiResponse({ status: 201, description: 'Template created successfully' })
+  async createTemplate(@Body() dto: Partial<MarketplaceTemplate>) {
+    return this.templateService.createTemplate(dto);
+  }
+
   @Get()
   @ApiOperation({ summary: 'List and filter Golden Marketplace Templates' })
   @ApiQuery({ name: 'category', required: false, enum: TemplateCategory })

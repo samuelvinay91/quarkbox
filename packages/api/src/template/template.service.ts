@@ -268,6 +268,26 @@ export class TemplateService implements OnModuleInit {
   }
 
   /**
+   * Create a new custom template (Marketplace Publication)
+   */
+  async createTemplate(dto: Partial<MarketplaceTemplate>): Promise<MarketplaceTemplate> {
+    const existing = await this.templateRepo.findOne({ where: { slug: dto.slug } });
+    if (existing) {
+      throw new BadRequestException(`Template with slug '${dto.slug}' already exists.`);
+    }
+
+    const template = this.templateRepo.create({
+      ...dto,
+      isOfficial: false, // Custom templates are not official QuarkBox templates
+      launchesCount: 0,
+    });
+
+    const saved = await this.templateRepo.save(template);
+    this.logger.log(`Created new marketplace template: ${saved.slug}`);
+    return saved;
+  }
+
+  /**
    * List / Search marketplace templates with filtering
    */
   async findAll(query?: {

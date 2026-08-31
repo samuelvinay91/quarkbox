@@ -1,6 +1,6 @@
 {
   "name": "@quarkbox/mcp-server",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "QuarkBox MCP Server — AI agent tool integration for cloud sandboxes",
   "main": "dist/index.js",
   "bin": {
