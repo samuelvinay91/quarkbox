@@ -1,5 +1,5 @@
 {
-  "name": "@quarkbox/mcp-server",
+  "name": "@samuelvinay91/quarkbox-mcp-server",
   "version": "1.0.0",
   "description": "QuarkBox MCP Server — AI agent tool integration for cloud sandboxes",
   "main": "dist/index.js",
@@ -20,6 +20,14 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samuelvinay91/quarkbox.git",
+    "directory": "packages/mcp-server"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "license": "MIT"
 }
