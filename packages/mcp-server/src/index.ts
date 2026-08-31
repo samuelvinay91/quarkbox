@@ -557,7 +557,7 @@ server.tool(
     sandboxName: z.string().describe("Unique name for the launched sandbox"),
     gitRepoUrl: z.string().optional().describe("Optional Git repository URL to clone automatically into the template"),
     gitBranch: z.string().optional().describe("Optional Git branch to checkout"),
-    envVars: z.record(z.string()).optional().describe("Custom environment variables to pass to the sandbox"),
+    envVars: z.record(z.string(), z.string()).optional().describe("Custom environment variables to pass to the sandbox"),
   },
   async ({ templateSlug, sandboxName, gitRepoUrl, gitBranch, envVars }) => {
     try {
@@ -631,6 +631,9 @@ server.tool(
         ],
       };
     }
+  }
+);
+
 // ── Tool: launch_cluster ───────────────────────────────────────────────
 
 server.tool(
@@ -645,8 +648,8 @@ server.tool(
       networkAlias: z.string().describe("Internal DNS alias hostname within cluster (e.g. 'frontend', 'backend', 'db')"),
       cpuLimit: z.number().optional().describe("vCPU allocation (e.g. 2)"),
       memoryLimit: z.string().optional().describe("RAM allocation (e.g. '1g')"),
-      envVars: z.record(z.string()).optional().describe("Node environment variables"),
-      ports: z.record(z.string()).optional().describe("Ports mapping"),
+      envVars: z.record(z.string(), z.string()).optional().describe("Node environment variables"),
+      ports: z.record(z.string(), z.string()).optional().describe("Ports mapping"),
     })).describe("List of cluster node specifications to spin up in parallel"),
   },
   async ({ clusterName, nodes }) => {
