@@ -6,6 +6,7 @@ import { ClusterController } from './cluster.controller';
 import { SandboxModule } from '../sandbox/sandbox.module';
 import { TemplateModule } from '../template/template.module';
 import { ActivityModule } from '../activity/activity.module';
+import { WebhookModule } from '../webhook/webhook.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -14,6 +15,7 @@ import { ConfigModule } from '@nestjs/config';
     SandboxModule,
     TemplateModule,
     ActivityModule,
+    WebhookModule,
     ConfigModule,
   ],
   providers: [ClusterService],

@@ -12,8 +12,11 @@ import { PoolService } from '../src/pool/pool.service';
 import { SnapshotModule } from '../src/snapshot/snapshot.module';
 import { SnapshotService } from '../src/snapshot/snapshot.service';
 import { Snapshot } from '../src/snapshot/snapshot.entity';
+import { Cluster } from '../src/cluster/cluster.entity';
 import { Activity } from '../src/activity/activity.entity';
 import { MarketplaceTemplate } from '../src/template/template.entity';
+import { Plan } from '../src/plan/plan.entity';
+import { PlanModule } from '../src/plan/plan.module';
 import { GovernorModule } from '../src/governor/governor.module';
 import { HibernationService } from '../src/governor/hibernation.service';
 import { ContextModule } from '../src/context/context.module';
@@ -28,6 +31,7 @@ import { TemplateModule } from '../src/template/template.module';
 import { TemplateController } from '../src/template/template.controller';
 import { RUNTIME_PROVIDER } from '../src/runtime/runtime.interface';
 import { MockRuntimeProvider } from '../src/runtime/mock.provider';
+import { DockerProvider } from '../src/runtime/docker.provider';
 
 describe('QuarkBox Enterprise E2E Test Suite', () => {
   let app: INestApplication;
@@ -57,7 +61,7 @@ describe('QuarkBox Enterprise E2E Test Suite', () => {
         TypeOrmModule.forRoot({
           type: 'better-sqlite3',
           database: ':memory:',
-          entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate],
+          entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, Plan],
           synchronize: true,
           logging: false,
         }),
@@ -70,9 +74,12 @@ describe('QuarkBox Enterprise E2E Test Suite', () => {
         DevcontainerModule,
         ProxyModule,
         TemplateModule,
+        PlanModule,
       ],
     })
       .overrideProvider(RUNTIME_PROVIDER)
+      .useClass(MockRuntimeProvider)
+      .overrideProvider(DockerProvider)
       .useClass(MockRuntimeProvider)
       .compile();
 

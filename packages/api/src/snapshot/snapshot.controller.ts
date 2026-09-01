@@ -10,6 +10,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Inject,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -49,14 +50,14 @@ export class SnapshotController {
   @Get()
   @ApiOperation({ summary: 'List all snapshots' })
   @ApiQuery({ name: 'sandboxId', required: false })
-  async findAll(@Query('sandboxId') sandboxId?: string) {
-    return this.snapshotService.findAll(sandboxId);
+  async findAll(@Query('sandboxId') sandboxId: string | undefined, @Request() req: any) {
+    return this.snapshotService.findAll(sandboxId, req.user.userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get snapshot by ID' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.snapshotService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.snapshotService.findOne(id, req.user.userId);
   }
 
   @Post('sandbox/:sandboxId')
@@ -64,11 +65,13 @@ export class SnapshotController {
   async create(
     @Param('sandboxId', ParseUUIDPipe) sandboxId: string,
     @Body() dto: CreateSnapshotDto,
+    @Request() req: any,
   ) {
     return this.snapshotService.createSnapshot({
       sandboxId,
       name: dto.name,
       description: dto.description,
+      userId: req.user.userId,
     });
   }
 
@@ -77,14 +80,15 @@ export class SnapshotController {
   async fork(
     @Param('sandboxId', ParseUUIDPipe) sandboxId: string,
     @Body() dto: ForkSandboxDto,
+    @Request() req: any,
   ) {
-    return this.snapshotService.forkSandbox(sandboxId, dto.forkName);
+    return this.snapshotService.forkSandbox(sandboxId, dto.forkName, req.user.userId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a snapshot' })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.snapshotService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.snapshotService.remove(id, req.user.userId);
   }
 }

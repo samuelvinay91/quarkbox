@@ -17,9 +17,21 @@ spec:
         app: quarkbox
         component: api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: api
-          image: quarkbox/api:latest
+          image: quarkbox/api:0.1.0
+          securityContext:
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: 3000
           env:
@@ -79,12 +91,49 @@ spec:
       protocol: TCP
   type: ClusterIP
 ---
-apiVersion: v1
-kind: Secret
+# Secrets must be managed externally (SealedSecrets, External Secrets Operator, or Vault). See docs/secrets.md
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata:
-  name: quarkbox-secrets
-type: Opaque
-stringData:
-  database-host: "quarkbox-postgres"
-  database-password: "change-me-in-production"
-  jwt-secret: "change-me-in-production"
+  name: quarkbox-api-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: quarkbox
+      component: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: quarkbox
+              component: ingress
+      ports:
+        - protocol: TCP
+          port: 3000
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: quarkbox
+              component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: quarkbox
+              component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+

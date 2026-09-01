@@ -34,10 +34,11 @@ spec:
                 cpu:
                   type: integer
                   minimum: 1
-                  maximum: 32
+                  maximum: 8
                   default: 1
                 memory:
                   type: string
+                  enum: ["128m", "256m", "512m", "1Gi", "2Gi", "4Gi", "8Gi"]
                   default: "512m"
                 gitRepo:
                   type: string

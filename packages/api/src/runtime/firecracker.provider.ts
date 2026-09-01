@@ -8,10 +8,7 @@ import {
   ContainerStats,
 } from './runtime.interface';
 import { ConfigService } from '@nestjs/config';
-import { exec as childExec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(childExec);
+import Dockerode from 'dockerode';
 
 /**
  * Firecracker MicroVM Runtime Provider
@@ -30,8 +27,15 @@ export class FirecrackerProvider implements RuntimeProvider {
   readonly name = 'firecracker';
   private readonly logger = new Logger(FirecrackerProvider.name);
   private readonly vms = new Map<string, RuntimeInfo>();
+  private readonly docker: Dockerode;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    const socketPath =
+      this.config?.get<string>('DOCKER_SOCKET') ||
+      process.env.DOCKER_SOCKET ||
+      '/var/run/docker.sock';
+    this.docker = new Dockerode({ socketPath });
+  }
 
   async healthCheck(): Promise<boolean> {
     // In production, verify /dev/kvm accessibility and firecracker daemon socket
@@ -99,13 +103,24 @@ export class FirecrackerProvider implements RuntimeProvider {
     this.logger.log(
       `[Firecracker] Executing command inside microVM ${options.containerId}: ${options.command.join(' ').slice(0, 50)}...`,
     );
-    // In production, uses vsock (virtio socket) agent inside guest VM
     try {
-      // Secure local emulation: run inside an ephemeral, isolated Docker container
-      // instead of directly on the host API server to prevent host RCE.
-      const dockerCmd = `docker run --rm -i python:3.12-slim sh -c ${JSON.stringify(options.command.join(' '))}`;
-      const { stdout, stderr } = await execAsync(dockerCmd);
-      return { exitCode: 0, stdout, stderr };
+      const exec = await this.docker.getContainer(options.containerId).exec({
+        AttachStdout: true,
+        AttachStderr: true,
+        Cmd: options.command,
+      });
+      const stream = await exec.start({ Tty: false });
+      const output = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        stream.on('end', () => {
+          const full = Buffer.concat(chunks).toString('utf-8');
+          resolve({ stdout: full, stderr: '' });
+        });
+        stream.on('error', reject);
+      });
+      const inspect = await exec.inspect();
+      return { exitCode: inspect.ExitCode ?? -1, stdout: output.stdout, stderr: output.stderr };
     } catch (err: any) {
       return { exitCode: err.code || 1, stdout: err.stdout || '', stderr: err.stderr || err.message };
     }

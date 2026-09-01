@@ -40,6 +40,10 @@ export interface ExecResult {
   exitCode: number;
   stdout: string;
   stderr: string;
+  /** True if stdout or stderr was truncated due to exceeding the max output limit */
+  truncated?: boolean;
+  /** Original output size in bytes before truncation */
+  originalSizeBytes?: number;
 }
 
 export const RUNTIME_PROVIDER = 'RUNTIME_PROVIDER';

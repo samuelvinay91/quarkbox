@@ -11,6 +11,7 @@ import { Snapshot, SnapshotStatus } from './snapshot.entity';
 import { Sandbox, SandboxStatus } from '../sandbox/sandbox.entity';
 import { ActivityService } from '../activity/activity.service';
 import { ActivityType } from '../activity/activity.entity';
+import { WebhookService } from '../webhook/webhook.service';
 import Dockerode from 'dockerode';
 import { ConfigService } from '@nestjs/config';
 
@@ -26,6 +27,8 @@ export class SnapshotService {
     private readonly sandboxRepo: Repository<Sandbox>,
     @Inject(ActivityService)
     private readonly activityService: ActivityService,
+    @Inject(WebhookService)
+    private readonly webhookService: WebhookService,
     private readonly config?: ConfigService,
   ) {
     const socketPath =
@@ -44,8 +47,10 @@ export class SnapshotService {
     description?: string;
     userId?: string;
   }): Promise<Snapshot> {
+    const sandboxWhere: Record<string, unknown> = { id: params.sandboxId };
+    if (params.userId) sandboxWhere.userId = params.userId;
     const sandbox = await this.sandboxRepo.findOne({
-      where: { id: params.sandboxId },
+      where: sandboxWhere,
     });
     if (!sandbox) {
       throw new NotFoundException(`Sandbox ${params.sandboxId} not found`);
@@ -116,6 +121,8 @@ export class SnapshotService {
         metadata: { snapshotId: saved.id, imageTag: snapshotTag },
       });
 
+      this.webhookService.dispatch('snapshot.created', params.userId, { snapshotId: saved.id, sandboxId: sandbox.id, name: params.name });
+
       return finalSnapshot;
     } catch (err: any) {
       saved.status = SnapshotStatus.ERROR;
@@ -145,8 +152,8 @@ export class SnapshotService {
   /**
    * List all snapshots
    */
-  async findAll(sandboxId?: string): Promise<Snapshot[]> {
-    const where: Record<string, unknown> = {};
+  async findAll(sandboxId: string | undefined, userId: string): Promise<Snapshot[]> {
+    const where: Record<string, unknown> = { userId };
     if (sandboxId) where.sandboxId = sandboxId;
     return this.snapshotRepo.find({
       where,
@@ -158,9 +165,9 @@ export class SnapshotService {
   /**
    * Get single snapshot
    */
-  async findOne(id: string): Promise<Snapshot> {
+  async findOne(id: string, userId: string): Promise<Snapshot> {
     const snapshot = await this.snapshotRepo.findOne({
-      where: { id },
+      where: { id, userId },
       relations: { sandbox: true },
     });
     if (!snapshot) {
@@ -172,8 +179,8 @@ export class SnapshotService {
   /**
    * Delete snapshot
    */
-  async remove(id: string): Promise<void> {
-    const snapshot = await this.findOne(id);
+  async remove(id: string, userId: string): Promise<void> {
+    const snapshot = await this.findOne(id, userId);
     try {
       if (snapshot.snapshotImage) {
         await this.docker.getImage(snapshot.snapshotImage).remove({ force: true });

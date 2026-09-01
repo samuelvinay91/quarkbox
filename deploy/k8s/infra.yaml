@@ -17,9 +17,19 @@ spec:
         app: quarkbox
         component: postgres
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          image: postgres:16.4-alpine
+          securityContext:
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 5432
           env:
@@ -42,6 +52,22 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - quarkbox
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - quarkbox
+            initialDelaySeconds: 5
+            periodSeconds: 10
       volumes:
         - name: postgres-data
           persistentVolumeClaim:
@@ -89,12 +115,47 @@ spec:
         app: quarkbox
         component: redis
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: redis:7.4-alpine
+          securityContext:
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 6379
-          command: ["redis-server", "--appendonly", "yes"]
+          command:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --requirepass
+            - $(REDIS_PASSWORD)
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: quarkbox-secrets
+                  key: redis-password
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
           resources:
             requests:
               cpu: 100m
@@ -114,3 +175,13 @@ spec:
   ports:
     - port: 6379
       targetPort: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: quarkbox-default-deny
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

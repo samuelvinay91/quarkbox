@@ -6,6 +6,7 @@ import { SandboxController } from './sandbox.controller';
 import { RuntimeModule } from '../runtime/runtime.module';
 import { ActivityModule } from '../activity/activity.module';
 import { PoolModule } from '../pool/pool.module';
+import { WebhookModule } from '../webhook/webhook.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { PoolModule } from '../pool/pool.module';
     RuntimeModule,
     ActivityModule,
     PoolModule,
+    WebhookModule,
   ],
   providers: [SandboxService],
   controllers: [SandboxController],

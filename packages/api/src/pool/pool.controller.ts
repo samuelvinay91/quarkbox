@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Inject, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PoolService } from './pool.service';
 
@@ -14,6 +15,7 @@ export class PoolController {
     return this.poolService.getPoolStatus();
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Post('replenish')
   @ApiOperation({ summary: 'Trigger manual pool replenishment' })
   @ApiResponse({ status: 200 })

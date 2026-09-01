@@ -138,6 +138,29 @@ cd packages/api && npm run start:dev
 cd packages/mcp-server && npm run build && npm start
 ```
 
+### Development Quick-Start
+
+```bash
+npm install                # install all workspaces
+npm run dev                # docker compose up (Postgres/Redis) + start API on :3000
+npm run dev:dashboard      # start Next.js dashboard on :3001
+cp deploy/docker/.env.example packages/api/.env   # then set JWT_SECRET, etc.
+curl http://localhost:3000/api/health              # verify API is up
+```
+
+See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for a full walkthrough.
+
+---
+
+## 📚 Documentation
+
+- **[API Reference](packages/api/API.md)** — every REST endpoint (auth, sandboxes, snapshots, clusters, activity, webhooks, plan, proxy) with request/response schemas and curl examples.
+- **[Getting Started](docs/GETTING_STARTED.md)** — prerequisites, local setup, env vars, and creating your first sandbox.
+- **[Deployment](docs/DEPLOYMENT.md)** — Docker Compose & Kubernetes (Helm) deployment, values reference, env var reference, secrets, scaling, and health checks.
+- **[Security](docs/SECURITY.md)** — auth model, container isolation, network policies, and a pre-release checklist.
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** — common issues with symptom → cause → fix.
+- **[Data Migration](docs/MIGRATION.md)** — schema management, backing up SQLite, and migrating to Postgres.
+
 ---
 
 ## 🧪 Real Test Suites

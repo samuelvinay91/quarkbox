@@ -80,7 +80,19 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
     const exposedPorts: Record<string, object> = {};
     const portBindings: Record<string, Array<{ HostPort: string }>> = {};
     if (options.ports) {
-      for (const [containerPort, hostPort] of Object.entries(options.ports)) {
+      const portEntries = Object.entries(options.ports);
+      if (portEntries.length > 10) {
+        throw new Error('Maximum 10 port mappings allowed per sandbox');
+      }
+      for (const [containerPort, hostPort] of portEntries) {
+        const containerPortNum = parseInt(containerPort, 10);
+        const hostPortNum = parseInt(hostPort, 10);
+        if (
+          isNaN(containerPortNum) || containerPortNum < 1 || containerPortNum > 65535 ||
+          isNaN(hostPortNum) || hostPortNum < 1 || hostPortNum > 65535
+        ) {
+          throw new Error(`Invalid port mapping: ${containerPort} -> ${hostPort}. Ports must be between 1 and 65535.`);
+        }
         const portKey = `${containerPort}/tcp`;
         exposedPorts[portKey] = {};
         portBindings[portKey] = [{ HostPort: hostPort }];
@@ -118,10 +130,13 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
         NetworkMode: networkName,
         CpuCount: options.cpuLimit,
         Memory: memoryBytes,
-        MemorySwap: memoryBytes * 2,
+        MemorySwap: memoryBytes,
+        PidsLimit: 256,
+        ReadonlyRootfs: false,
+        StorageOpt: { size: options.diskLimit || '10g' },
         RestartPolicy: { Name: 'unless-stopped' },
         SecurityOpt: ['no-new-privileges:true'],
-        CapDrop: ['SYS_ADMIN', 'SYS_MODULE', 'SYS_RAWIO', 'MKNOD'],
+        CapDrop: ['ALL'],
         ExtraHosts: [
           '169.254.169.254:0.0.0.0', // AWS/GCP Metadata IPv4
           'metadata.google.internal:0.0.0.0', // GCP Metadata Domain
@@ -219,6 +234,10 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
 
     // Collect output with max buffer cap to prevent OOM
     const MAX_OUTPUT_BYTES = 5 * 1024 * 1024; // 5 MB cap
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+    let totalStdoutBytes = 0;
+    let totalStderrBytes = 0;
     let stdoutBytes = 0;
     let stderrBytes = 0;
     const stdout: Buffer[] = [];
@@ -238,16 +257,22 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
       const stderrStream = new PassThrough();
 
       stdoutStream.on('data', (chunk: Buffer) => {
+        totalStdoutBytes += chunk.length;
         if (stdoutBytes < MAX_OUTPUT_BYTES) {
           stdout.push(chunk);
           stdoutBytes += chunk.length;
+        } else {
+          stdoutTruncated = true;
         }
       });
 
       stderrStream.on('data', (chunk: Buffer) => {
+        totalStderrBytes += chunk.length;
         if (stderrBytes < MAX_OUTPUT_BYTES) {
           stderr.push(chunk);
           stderrBytes += chunk.length;
+        } else {
+          stderrTruncated = true;
         }
       });
 
@@ -266,10 +291,13 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
 
     const execInspect = await exec.inspect();
 
+    const truncated = stdoutTruncated || stderrTruncated;
     return {
       exitCode: execInspect.ExitCode ?? -1,
       stdout: Buffer.concat(stdout).toString('utf-8'),
       stderr: Buffer.concat(stderr).toString('utf-8'),
+      truncated,
+      originalSizeBytes: truncated ? totalStdoutBytes + totalStderrBytes : undefined,
     };
   }
 

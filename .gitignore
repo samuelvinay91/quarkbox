@@ -13,6 +13,7 @@ out/
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # IDE
 .vscode/
@@ -50,7 +51,20 @@ __pycache__/
 *.pyd
 .pytest_cache/
 
+# Secrets & credentials
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+
 # Misc
 *.tsbuildinfo
 .eslintcache
 quarkbox.db
+.playwright-mcp/

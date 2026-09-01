@@ -8,6 +8,7 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Logger, Inject } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { SandboxService } from '../sandbox/sandbox.service';
 import Dockerode from 'dockerode';
@@ -20,7 +21,7 @@ interface TerminalSession {
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
   },
   namespace: '/terminal',
 })
@@ -35,6 +36,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     @Inject(SandboxService)
     private readonly sandboxService: SandboxService,
+    private readonly jwtService: JwtService,
     private readonly config?: ConfigService,
   ) {
     const socketPath =
@@ -45,6 +47,19 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   handleConnection(client: Socket) {
+    const token = (client.handshake.auth?.token as string) || (client.handshake.query?.token as string);
+    if (!token) {
+      client.emit('error', 'Authentication required');
+      client.disconnect();
+      return;
+    }
+    try {
+      this.jwtService.verify(token);
+    } catch {
+      client.emit('error', 'Invalid token');
+      client.disconnect();
+      return;
+    }
     this.logger.log(`Client connected to terminal gateway: ${client.id}`);
   }
 

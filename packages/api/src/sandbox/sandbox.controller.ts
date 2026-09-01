@@ -10,6 +10,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Inject,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -41,15 +42,15 @@ export class SandboxController {
   @Post()
   @ApiOperation({ summary: 'Create a new sandbox' })
   @ApiResponse({ status: 201, type: SandboxResponseDto })
-  async create(@Body() dto: CreateSandboxDto) {
-    return this.sandboxService.create(dto);
+  async create(@Body() dto: CreateSandboxDto, @Request() req: any) {
+    return this.sandboxService.create(dto, req.user.userId);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all sandboxes' })
   @ApiResponse({ status: 200, type: [SandboxResponseDto] })
-  async findAll() {
-    return this.sandboxService.findAll();
+  async findAll(@Request() req: any) {
+    return this.sandboxService.findAll(req.user.userId);
   }
 
   @Get(':id')
@@ -57,8 +58,8 @@ export class SandboxController {
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, type: SandboxResponseDto })
   @ApiResponse({ status: 404, description: 'Sandbox not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.findOne(id, req.user.userId);
   }
 
   @Put(':id')
@@ -68,8 +69,9 @@ export class SandboxController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSandboxDto,
+    @Request() req: any,
   ) {
-    return this.sandboxService.update(id, dto);
+    return this.sandboxService.update(id, dto, req.user.userId);
   }
 
   @Delete(':id')
@@ -77,8 +79,8 @@ export class SandboxController {
   @ApiOperation({ summary: 'Delete a sandbox' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 204, description: 'Sandbox deleted' })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.remove(id, req.user.userId);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────
@@ -88,8 +90,8 @@ export class SandboxController {
   @ApiOperation({ summary: 'Start a stopped/paused sandbox' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, type: SandboxResponseDto })
-  async start(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.start(id);
+  async start(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.start(id, req.user.userId);
   }
 
   @Post(':id/stop')
@@ -97,8 +99,8 @@ export class SandboxController {
   @ApiOperation({ summary: 'Stop a running sandbox' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, type: SandboxResponseDto })
-  async stop(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.stop(id);
+  async stop(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.stop(id, req.user.userId);
   }
 
   @Post(':id/pause')
@@ -106,8 +108,8 @@ export class SandboxController {
   @ApiOperation({ summary: 'Pause a running sandbox' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, type: SandboxResponseDto })
-  async pause(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.pause(id);
+  async pause(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.pause(id, req.user.userId);
   }
 
   @Post(':id/resume')
@@ -115,8 +117,8 @@ export class SandboxController {
   @ApiOperation({ summary: 'Resume a paused sandbox' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, type: SandboxResponseDto })
-  async resume(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.resume(id);
+  async resume(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.resume(id, req.user.userId);
   }
 
   // ── Exec ──────────────────────────────────────────────────────────
@@ -129,8 +131,9 @@ export class SandboxController {
   async exec(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ExecCommandDto,
+    @Request() req: any,
   ) {
-    return this.sandboxService.exec(id, dto.command, dto.workdir);
+    return this.sandboxService.exec(id, dto.command, dto.workdir, req.user.userId);
   }
 
   // ── Agent SDK ───────────────────────────────────────────────────────
@@ -143,8 +146,9 @@ export class SandboxController {
   async runPython(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RunPythonDto,
+    @Request() req: any,
   ) {
-    return this.sandboxService.runPython(id, dto.code);
+    return this.sandboxService.runPython(id, dto.code, req.user.userId);
   }
 
   // ── Deep Metrics ──────────────────────────────────────────────────
@@ -152,7 +156,7 @@ export class SandboxController {
   @Get(':id/stats')
   @ApiOperation({ summary: 'Get real-time container resource metrics (CPU/memory/network/IO from Docker stats API)' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  async getStats(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sandboxService.getStats(id);
+  async getStats(@Param('id', ParseUUIDPipe) id: string, @Request() req: any) {
+    return this.sandboxService.getStats(id, req.user.userId);
   }
 }

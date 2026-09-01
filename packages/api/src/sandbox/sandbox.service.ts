@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,6 +18,11 @@ import { RuntimeProvider } from '../runtime/runtime.interface';
 import { ActivityService } from '../activity/activity.service';
 import { ActivityType } from '../activity/activity.entity';
 import { PoolService } from '../pool/pool.service';
+import { WebhookService } from '../webhook/webhook.service';
+import { validateCommand } from '../governor/security.service';
+import { QuotaService } from '../plan/quota.service';
+import { User } from '../user/user.entity';
+import { Plan } from '../plan/plan.entity';
 
 @Injectable()
 export class SandboxService implements OnModuleInit {
@@ -32,6 +38,10 @@ export class SandboxService implements OnModuleInit {
     private readonly activityService: ActivityService,
     @Inject(PoolService)
     private readonly poolService: PoolService,
+    @Inject(WebhookService)
+    private readonly webhookService: WebhookService,
+    @Inject(QuotaService)
+    private readonly quotaService: QuotaService,
   ) {}
 
   private getRuntime(runtimeType: string): RuntimeProvider {
@@ -61,14 +71,36 @@ export class SandboxService implements OnModuleInit {
     const startTime = Date.now();
     this.logger.log(`Creating sandbox: ${dto.name}`);
 
+    let plan: Plan | null = null;
+    if (userId) {
+      const user = await this.sandboxRepo.manager
+        .getRepository(User)
+        .findOne({ where: { id: userId } });
+      if (user) {
+        plan = await this.quotaService.getPlanForUser(user);
+        const check = await this.quotaService.checkCreateAllowed(userId, plan);
+        if (!check.allowed) {
+          throw new ForbiddenException('Plan limit reached: ' + check.reason);
+        }
+      }
+    }
+
+    const clamped = this.quotaService.validateResourceLimits(
+      plan,
+      dto.cpuLimit,
+      dto.memoryLimit,
+      dto.diskLimit,
+    );
+
     // Create DB record
     const sandbox = this.sandboxRepo.create({
       name: dto.name,
       description: dto.description,
       image: dto.image || 'ubuntu:22.04',
       runtime: dto.runtime,
-      cpuLimit: dto.cpuLimit || 1,
-      memoryLimit: dto.memoryLimit || '512m',
+      cpuLimit: clamped.cpuLimit,
+      memoryLimit: clamped.memoryLimit,
+      diskLimit: clamped.diskLimit,
       ports: dto.ports || {},
       envVars: dto.envVars || {},
       labels: dto.labels || {},
@@ -123,6 +155,12 @@ export class SandboxService implements OnModuleInit {
         },
       });
 
+      this.webhookService.dispatch('sandbox.created', userId, { sandboxId: saved.id, name: saved.name, status: saved.status });
+
+      if (userId) {
+        await this.quotaService.incrementDailyUsage(userId);
+      }
+
       return result;
     } catch (error) {
       saved.status = SandboxStatus.ERROR;
@@ -138,31 +176,63 @@ export class SandboxService implements OnModuleInit {
     }
   }
 
-  async findAll(userId?: string): Promise<Sandbox[]> {
-    const where: Record<string, unknown> = {};
-    if (userId) where.userId = userId;
+  async findAll(userId: string): Promise<Sandbox[]> {
+    const where: Record<string, unknown> = { userId };
     return this.sandboxRepo.find({
       where,
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: string): Promise<Sandbox> {
-    const sandbox = await this.sandboxRepo.findOne({ where: { id } });
+  async findOne(id: string, userId?: string): Promise<Sandbox> {
+    const where: Record<string, unknown> = { id };
+    if (userId) where.userId = userId;
+    const sandbox = await this.sandboxRepo.findOne({ where });
     if (!sandbox) {
       throw new NotFoundException(`Sandbox ${id} not found`);
     }
     return sandbox;
   }
 
-  async update(id: string, dto: UpdateSandboxDto): Promise<Sandbox> {
-    const sandbox = await this.findOne(id);
-    Object.assign(sandbox, dto);
-    return this.sandboxRepo.save(sandbox);
+  async update(id: string, dto: UpdateSandboxDto, userId?: string): Promise<Sandbox> {
+    const sandbox = await this.findOne(id, userId);
+    const before = {
+      name: sandbox.name,
+      image: sandbox.image,
+      cpuLimit: sandbox.cpuLimit,
+      memoryLimit: sandbox.memoryLimit,
+      diskLimit: sandbox.diskLimit,
+    };
+    if (dto.name !== undefined) sandbox.name = dto.name;
+    if (dto.image !== undefined) sandbox.image = dto.image;
+    if (dto.cpuLimit !== undefined) sandbox.cpuLimit = dto.cpuLimit;
+    if (dto.memoryLimit !== undefined) sandbox.memoryLimit = dto.memoryLimit;
+    if (dto.diskLimit !== undefined) sandbox.diskLimit = dto.diskLimit;
+    if (dto.envVars !== undefined) sandbox.envVars = dto.envVars;
+    if (dto.ports !== undefined) sandbox.ports = dto.ports;
+    if (dto.labels !== undefined) sandbox.labels = dto.labels;
+    const result = await this.sandboxRepo.save(sandbox);
+    await this.activityService.record({
+      type: ActivityType.SANDBOX_CREATED,
+      summary: `Sandbox "${result.name}" updated`,
+      sandboxId: result.id,
+      userId: userId || sandbox.userId,
+      metadata: {
+        action: 'update',
+        changed: {
+          name: before.name !== result.name ? result.name : undefined,
+          image: before.image !== result.image ? result.image : undefined,
+          cpuLimit: before.cpuLimit !== result.cpuLimit ? result.cpuLimit : undefined,
+          memoryLimit: before.memoryLimit !== result.memoryLimit ? result.memoryLimit : undefined,
+          diskLimit: before.diskLimit !== result.diskLimit ? result.diskLimit : undefined,
+        },
+      },
+    });
+    return result;
   }
 
-  async remove(id: string): Promise<void> {
-    const sandbox = await this.findOne(id);
+  async remove(id: string, userId?: string): Promise<void> {
+    const sandbox = await this.findOne(id, userId);
 
     sandbox.status = SandboxStatus.DELETING;
     await this.sandboxRepo.save(sandbox);
@@ -178,12 +248,24 @@ export class SandboxService implements OnModuleInit {
     }
 
     await this.sandboxRepo.remove(sandbox);
+    await this.activityService.record({
+      type: ActivityType.SANDBOX_DELETED,
+      summary: `Sandbox "${sandbox.name}" deleted`,
+      sandboxId: sandbox.id,
+      userId: userId || sandbox.userId,
+      metadata: {
+        action: 'delete',
+        image: sandbox.image,
+        runtime: sandbox.runtime,
+      },
+    });
+    this.webhookService.dispatch('sandbox.deleted', sandbox.userId, { sandboxId: sandbox.id, name: sandbox.name });
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────
 
-  async start(id: string): Promise<Sandbox> {
-    const sandbox = await this.findOne(id);
+  async start(id: string, userId?: string): Promise<Sandbox> {
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.STOPPED, SandboxStatus.PAUSED]);
 
     if (sandbox.containerId) {
@@ -198,12 +280,14 @@ export class SandboxService implements OnModuleInit {
       type: ActivityType.SANDBOX_STARTED,
       summary: `Sandbox "${sandbox.name}" started`,
       sandboxId: sandbox.id,
+      userId: userId || sandbox.userId,
     });
+    this.webhookService.dispatch('sandbox.started', sandbox.userId, { sandboxId: sandbox.id, name: sandbox.name, status: sandbox.status });
     return result;
   }
 
-  async stop(id: string): Promise<Sandbox> {
-    const sandbox = await this.findOne(id);
+  async stop(id: string, userId?: string): Promise<Sandbox> {
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.RUNNING, SandboxStatus.PAUSED]);
 
     if (sandbox.containerId) {
@@ -217,12 +301,14 @@ export class SandboxService implements OnModuleInit {
       type: ActivityType.SANDBOX_STOPPED,
       summary: `Sandbox "${sandbox.name}" stopped`,
       sandboxId: sandbox.id,
+      userId: userId || sandbox.userId,
     });
+    this.webhookService.dispatch('sandbox.stopped', sandbox.userId, { sandboxId: sandbox.id, name: sandbox.name, status: sandbox.status });
     return result;
   }
 
-  async pause(id: string): Promise<Sandbox> {
-    const sandbox = await this.findOne(id);
+  async pause(id: string, userId?: string): Promise<Sandbox> {
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.RUNNING]);
 
     if (sandbox.containerId) {
@@ -231,11 +317,18 @@ export class SandboxService implements OnModuleInit {
     }
 
     sandbox.status = SandboxStatus.PAUSED;
-    return this.sandboxRepo.save(sandbox);
+    const result = await this.sandboxRepo.save(sandbox);
+    await this.activityService.record({
+      type: ActivityType.SANDBOX_PAUSED,
+      summary: `Sandbox "${sandbox.name}" paused`,
+      sandboxId: sandbox.id,
+      userId: userId || sandbox.userId,
+    });
+    return result;
   }
 
-  async resume(id: string): Promise<Sandbox> {
-    const sandbox = await this.findOne(id);
+  async resume(id: string, userId?: string): Promise<Sandbox> {
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.PAUSED]);
 
     if (sandbox.containerId) {
@@ -245,7 +338,14 @@ export class SandboxService implements OnModuleInit {
 
     sandbox.status = SandboxStatus.RUNNING;
     sandbox.lastActiveAt = new Date();
-    return this.sandboxRepo.save(sandbox);
+    const result = await this.sandboxRepo.save(sandbox);
+    await this.activityService.record({
+      type: ActivityType.SANDBOX_RESUMED,
+      summary: `Sandbox "${sandbox.name}" resumed`,
+      sandboxId: sandbox.id,
+      userId: userId || sandbox.userId,
+    });
+    return result;
   }
 
   // ── Exec ──────────────────────────────────────────────────────────
@@ -254,17 +354,25 @@ export class SandboxService implements OnModuleInit {
     id: string,
     command: string,
     workdir?: string,
+    userId?: string,
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const sandbox = await this.findOne(id);
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.RUNNING]);
 
     if (!sandbox.containerId) {
       throw new BadRequestException('Sandbox has no container');
     }
 
-    // ── Cloud Metadata Shield ─────────────────────────────────────────
-    // SSRF protection is now handled securely at the network orchestration layer
-    // by DNS sinkholing metadata IPs in the Docker provider (ExtraHosts).
+    // ── Command Security Validation (defense-in-depth) ────────────────
+    const scan = validateCommand(command);
+    if (!scan.isSafe) {
+      this.logger.warn(
+        `🚨 Command blocked by security validation in sandbox ${sandbox.id}: ${scan.blockedReason}`,
+      );
+      throw new BadRequestException(
+        `Command rejected by security policy: ${scan.blockedReason}`,
+      );
+    }
 
     // Update last active timestamp
     sandbox.lastActiveAt = new Date();
@@ -279,10 +387,13 @@ export class SandboxService implements OnModuleInit {
     });
     const durationMs = Date.now() - startTime;
 
+    const wasTruncated = result.truncated === true;
+
     await this.activityService.record({
       type: ActivityType.COMMAND_EXECUTED,
       summary: `Executed: ${command.substring(0, 100)}${command.length > 100 ? '...' : ''}`,
       sandboxId: sandbox.id,
+      userId: userId || sandbox.userId,
       durationMs,
       isError: result.exitCode !== 0,
       metadata: {
@@ -291,8 +402,26 @@ export class SandboxService implements OnModuleInit {
         exitCode: result.exitCode,
         stdoutLength: result.stdout.length,
         stderrLength: result.stderr.length,
+        truncated: wasTruncated,
+        originalSizeBytes: result.originalSizeBytes,
       },
     });
+
+    // SOC2 CC7.2: Record truncation as a separate audit event for visibility
+    if (wasTruncated) {
+      await this.activityService.record({
+        type: ActivityType.EXEC_OUTPUT_TRUNCATED,
+        summary: `Exec output truncated: ${result.originalSizeBytes} bytes exceeded 5MB cap`,
+        sandboxId: sandbox.id,
+        userId: userId || sandbox.userId,
+        isError: false,
+        metadata: {
+          command: command.substring(0, 200),
+          originalSizeBytes: result.originalSizeBytes,
+          cappedAt: 5 * 1024 * 1024,
+        },
+      });
+    }
 
     return result;
   }
@@ -302,8 +431,9 @@ export class SandboxService implements OnModuleInit {
   async runPython(
     id: string,
     code: string,
+    userId?: string,
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const sandbox = await this.findOne(id);
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.RUNNING]);
 
     if (!sandbox.containerId) {
@@ -332,8 +462,8 @@ export class SandboxService implements OnModuleInit {
 
   // ── Metrics ───────────────────────────────────────────────────────
 
-  async getStats(id: string): Promise<import('../runtime/runtime.interface').ContainerStats> {
-    const sandbox = await this.findOne(id);
+  async getStats(id: string, userId?: string): Promise<import('../runtime/runtime.interface').ContainerStats> {
+    const sandbox = await this.findOne(id, userId);
     this.assertStatus(sandbox, [SandboxStatus.RUNNING]);
 
     if (!sandbox.containerId) {

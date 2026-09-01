@@ -3,12 +3,11 @@ services:
     image: postgres:16-alpine
     container_name: quarkbox-postgres
     restart: unless-stopped
-    ports:
-      - "5432:5432"
+    env_file: .env
     environment:
-      POSTGRES_USER: quarkbox
-      POSTGRES_PASSWORD: quarkbox_dev
-      POSTGRES_DB: quarkbox
+      POSTGRES_USER: ${POSTGRES_USER:-quarkbox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-quarkbox}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -22,13 +21,11 @@ services:
     image: redis:7-alpine
     container_name: quarkbox-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -38,11 +35,12 @@ services:
     image: dpage/pgadmin4:latest
     container_name: quarkbox-pgadmin
     restart: unless-stopped
+    env_file: .env
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@quarkbox.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@quarkbox.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-changeme}
     depends_on:
       postgres:
         condition: service_healthy

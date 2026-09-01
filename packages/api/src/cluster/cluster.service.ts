@@ -12,6 +12,7 @@ import { SandboxService } from '../sandbox/sandbox.service';
 import { TemplateService } from '../template/template.service';
 import { ActivityService } from '../activity/activity.service';
 import { ActivityType } from '../activity/activity.entity';
+import { WebhookService } from '../webhook/webhook.service';
 import Dockerode from 'dockerode';
 import { ConfigService } from '@nestjs/config';
 
@@ -36,6 +37,8 @@ export class ClusterService {
     private readonly templateService: TemplateService,
     @Inject(ActivityService)
     private readonly activityService: ActivityService,
+    @Inject(WebhookService)
+    private readonly webhookService: WebhookService,
     private readonly config?: ConfigService,
   ) {
     const socketPath =
@@ -175,6 +178,8 @@ export class ClusterService {
         },
       });
 
+      this.webhookService.dispatch('cluster.created', dto.userId, { clusterId: savedCluster.id, name: dto.name, nodeCount: spawnedSandboxes.length });
+
       return {
         cluster: savedCluster,
         sandboxes: spawnedSandboxes,
@@ -189,8 +194,9 @@ export class ClusterService {
   /**
    * List all clusters
    */
-  async findAll(): Promise<Cluster[]> {
+  async findAll(userId: string): Promise<Cluster[]> {
     return this.clusterRepo.find({
+      where: { userId },
       order: { createdAt: 'DESC' },
     });
   }
@@ -198,8 +204,8 @@ export class ClusterService {
   /**
    * Get single cluster details with active node statuses
    */
-  async findOne(id: string): Promise<{ cluster: Cluster; sandboxes: any[] }> {
-    const cluster = await this.clusterRepo.findOne({ where: { id } });
+  async findOne(id: string, userId: string): Promise<{ cluster: Cluster; sandboxes: any[] }> {
+    const cluster = await this.clusterRepo.findOne({ where: { id, userId } });
     if (!cluster) {
       throw new NotFoundException(`Cluster ${id} not found`);
     }
@@ -208,7 +214,7 @@ export class ClusterService {
     if (cluster.sandboxIds) {
       for (const sbId of cluster.sandboxIds) {
         try {
-          const sb = await this.sandboxService.findOne(sbId);
+          const sb = await this.sandboxService.findOne(sbId, userId);
           sandboxes.push(sb);
         } catch {
           // Ignore deleted sandboxes
@@ -222,10 +228,10 @@ export class ClusterService {
   /**
    * Stop all nodes in a cluster
    */
-  async stopCluster(id: string): Promise<Cluster> {
-    const { cluster, sandboxes } = await this.findOne(id);
+  async stopCluster(id: string, userId: string): Promise<Cluster> {
+    const { cluster, sandboxes } = await this.findOne(id, userId);
     for (const sb of sandboxes) {
-      await this.sandboxService.stop(sb.id).catch(() => {});
+      await this.sandboxService.stop(sb.id, userId).catch(() => {});
     }
     cluster.status = ClusterStatus.STOPPED;
     return this.clusterRepo.save(cluster);
@@ -234,12 +240,12 @@ export class ClusterService {
   /**
    * Teardown and delete entire cluster mesh and network
    */
-  async destroyCluster(id: string): Promise<void> {
-    const { cluster, sandboxes } = await this.findOne(id);
+  async destroyCluster(id: string, userId: string): Promise<void> {
+    const { cluster, sandboxes } = await this.findOne(id, userId);
 
     for (const sb of sandboxes) {
-      await this.sandboxService.stop(sb.id).catch(() => {});
-      await this.sandboxService.remove(sb.id).catch(() => {});
+      await this.sandboxService.stop(sb.id, userId).catch(() => {});
+      await this.sandboxService.remove(sb.id, userId).catch(() => {});
     }
 
     // Remove private bridge network
@@ -251,6 +257,7 @@ export class ClusterService {
     }
 
     await this.clusterRepo.remove(cluster);
+    this.webhookService.dispatch('cluster.destroyed', userId, { clusterId: cluster.id, name: cluster.name });
     this.logger.log(`💥 Cluster ${cluster.name} destroyed.`);
   }
 }

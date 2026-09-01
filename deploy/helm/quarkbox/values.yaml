@@ -7,7 +7,7 @@ api:
   replicaCount: 2
   image:
     repository: quarkbox/api
-    tag: latest
+    tag: 0.1.0
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -29,7 +29,7 @@ dashboard:
   replicaCount: 2
   image:
     repository: quarkbox/dashboard
-    tag: latest
+    tag: 0.1.0
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -68,8 +68,8 @@ engine:
 postgresql:
   enabled: true
   auth:
+    existingSecret: "quarkbox-db-secret"
     username: quarkbox
-    password: "quarkbox_secure_production_password"
     database: quarkbox
   persistence:
     size: 20Gi
@@ -78,4 +78,5 @@ redis:
   enabled: true
   architecture: standalone
   auth:
-    enabled: false
+    enabled: true
+    existingSecret: "quarkbox-redis-secret"

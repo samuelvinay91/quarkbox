@@ -22,6 +22,22 @@ export enum ActivityType {
   FILE_READ = 'file.read',
   SNAPSHOT_CREATED = 'snapshot.created',
   SNAPSHOT_RESTORED = 'snapshot.restored',
+  AUTH_LOGIN_SUCCESS = 'auth.login.success',
+  AUTH_LOGIN_FAILED = 'auth.login.failed',
+  AUTH_REGISTER = 'auth.register',
+  AUTH_LOGOUT = 'auth.logout',
+  AUTH_TOKEN_REVOKED = 'auth.token.revoked',
+  API_KEY_CREATED = 'api_key.created',
+  API_KEY_REVOKED = 'api_key.revoked',
+  CLUSTER_CREATED = 'cluster.created',
+  CLUSTER_DELETED = 'cluster.deleted',
+  DEPLOYMENT_STARTED = 'deployment.started',
+  DEPLOYMENT_COMPLETED = 'deployment.completed',
+  DEPLOYMENT_FAILED = 'deployment.failed',
+  CONFIG_CHANGED = 'config.changed',
+  SCHEMA_MIGRATION_RUN = 'schema.migration.run',
+  RETENTION_CLEANUP = 'retention.cleanup',
+  EXEC_OUTPUT_TRUNCATED = 'exec.output.truncated',
 }
 
 @Entity('activities')
@@ -58,6 +74,9 @@ export class Activity {
 
   @Column({ type: 'boolean', default: false })
   isError!: boolean;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  integrityHmac?: string;
 
   @CreateDateColumn()
   @Index()

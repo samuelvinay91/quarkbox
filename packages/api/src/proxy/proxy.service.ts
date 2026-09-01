@@ -31,6 +31,18 @@ export class ProxyService {
     const sandbox = await this.sandboxService.findOne(sandboxId);
 
     const cleanSubpath = subpath ? subpath.replace(/^\//, '') : '';
+    if (!/^[a-zA-Z0-9/_\-\.]*$/.test(cleanSubpath)) {
+      throw new BadRequestException('Invalid subpath');
+    }
+    if (cleanSubpath.split(/[/\\]/).some((segment) => segment === '..')) {
+      throw new BadRequestException('Invalid subpath');
+    }
+    if (!/^[A-Z]+$/.test(method)) {
+      throw new BadRequestException('Invalid HTTP method');
+    }
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new BadRequestException('Invalid port');
+    }
     const targetUrl = sandbox.containerIp
       ? `http://${sandbox.containerIp}:${port}/${cleanSubpath}`
       : `http://127.0.0.1:${port}/${cleanSubpath}`;

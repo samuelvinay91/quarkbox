@@ -1,3 +1,4 @@
+# Pipeline: Install → Lint → Typecheck → Audit → Build → E2E Tests
 name: CI / Multi-Environment Execution Tests
 
 on:
@@ -13,10 +14,10 @@ jobs:
     
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: 'npm'
@@ -24,10 +25,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Security audit
+        run: npm audit --audit-level=high || true
+
+      - name: Lint
+        run: npm run lint --workspaces --if-present
+
+      - name: Typecheck
+        run: npm run build --workspaces --if-present
+
       - name: Build packages (API & SDK)
         run: npm run build
 
       - name: Start API Daemon
+        env:
+          DEPLOY_COMMIT_SHA: ${{ github.sha }}
+          DEPLOY_BRANCH: ${{ github.ref_name }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          DEPLOY_PIPELINE_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DEPLOY_ENVIRONMENT: ci
+          JWT_SECRET: ci-test-secret-do-not-use-in-production
         run: |
           nohup npm run start --workspace=packages/api > api.log 2>&1 &
           # Wait for the API to boot and become responsive on port 3000

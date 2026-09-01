@@ -13,6 +13,10 @@ import { ConfigService } from '@nestjs/config';
  *
  * Interacts directly with containerd / CRI without Docker daemon overhead.
  * Provides lower memory footprint and tighter Kubernetes CRI parity.
+ *
+ * WARNING: This is a MOCK implementation. It is NOT production-ready.
+ * All methods return stub data and do not interact with a real containerd daemon.
+ * Do NOT use in production without completing a real CRI integration.
  */
 @Injectable()
 export class ContainerdProvider implements RuntimeProvider {
@@ -20,10 +24,15 @@ export class ContainerdProvider implements RuntimeProvider {
   private readonly logger = new Logger(ContainerdProvider.name);
   private readonly containers = new Map<string, RuntimeInfo>();
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    this.logger.warn(
+      '⚠️  ContainerdProvider is a MOCK implementation — not suitable for production use',
+    );
+  }
 
   async healthCheck(): Promise<boolean> {
-    return true;
+    this.logger.warn('ContainerdProvider.healthCheck() called on mock — returning false');
+    return false;
   }
 
   async pullImage(image: string): Promise<void> {
@@ -31,22 +40,9 @@ export class ContainerdProvider implements RuntimeProvider {
   }
 
   async create(options: RuntimeCreateOptions): Promise<RuntimeInfo> {
-    const id = `ctd-${Math.random().toString(36).substring(2, 12)}`;
-    this.logger.log(
-      `⚡ [containerd] Creating task & snapshot for ${options.name} (${options.image})`,
+    throw new Error(
+      'ContainerdProvider is not implemented. Use DockerProvider or FirecrackerProvider instead.',
     );
-
-    const info: RuntimeInfo = {
-      id,
-      status: 'running',
-      ip: `10.244.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`,
-      ports: options.ports,
-      createdAt: new Date(),
-      pid: Math.floor(Math.random() * 40000) + 2000,
-    };
-
-    this.containers.set(id, info);
-    return info;
   }
 
   async start(id: string): Promise<void> {
@@ -90,14 +86,9 @@ export class ContainerdProvider implements RuntimeProvider {
   }
 
   async exec(options: ExecOptions): Promise<ExecResult> {
-    this.logger.log(
-      `[containerd] ctr tasks exec ${options.containerId}: ${options.command.join(' ')}`,
+    throw new Error(
+      'ContainerdProvider.exec() is not implemented. Use DockerProvider or FirecrackerProvider instead.',
     );
-    return {
-      exitCode: 0,
-      stdout: `[containerd task ${options.containerId.slice(0, 8)}] command executed successfully\n`,
-      stderr: '',
-    };
   }
 
   async list(labels?: Record<string, string>): Promise<RuntimeInfo[]> {

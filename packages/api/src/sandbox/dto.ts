@@ -10,6 +10,7 @@ import {
   MaxLength,
   Matches,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { SandboxRuntime } from './sandbox.entity';
 
 export class CreateSandboxDto {
@@ -33,6 +34,7 @@ export class CreateSandboxDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   image?: string;
 
   @ApiPropertyOptional({ enum: SandboxRuntime, default: SandboxRuntime.DOCKER })
@@ -42,6 +44,7 @@ export class CreateSandboxDto {
 
   @ApiPropertyOptional({ example: 2, default: 1, description: 'CPU cores' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(16)
@@ -60,6 +63,8 @@ export class CreateSandboxDto {
   @ApiPropertyOptional({ example: '10g', default: '10g', description: 'Disk limit' })
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  @Matches(/^\d+[mg]$/i, { message: 'Disk must be in format like 10g' })
   diskLimit?: string;
 
   @ApiPropertyOptional({
@@ -94,11 +99,55 @@ export class UpdateSandboxDto {
   @MaxLength(255)
   name?: string;
 
-  @ApiPropertyOptional({ example: 'Updated description' })
+  @ApiPropertyOptional({
+    example: 'python:3.12-slim',
+    default: 'ubuntu:22.04',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
-  description?: string;
+  @MaxLength(255)
+  image?: string;
+
+  @ApiPropertyOptional({ example: 2, default: 1, description: 'CPU cores' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(16)
+  cpuLimit?: number;
+
+  @ApiPropertyOptional({
+    example: '1g',
+    default: '512m',
+    description: 'Memory limit (e.g., 512m, 1g, 2g)',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d+[mg]$/i, { message: 'Memory must be in format like 512m or 2g' })
+  memoryLimit?: string;
+
+  @ApiPropertyOptional({ example: '10g', default: '10g', description: 'Disk limit' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  @Matches(/^\d+[mg]$/i, { message: 'Disk must be in format like 10g' })
+  diskLimit?: string;
+
+  @ApiPropertyOptional({
+    example: { '8080': '8080', '3000': '3000' },
+    description: 'Port mappings (container:host)',
+  })
+  @IsOptional()
+  @IsObject()
+  ports?: Record<string, string>;
+
+  @ApiPropertyOptional({
+    example: { NODE_ENV: 'development' },
+    description: 'Environment variables',
+  })
+  @IsOptional()
+  @IsObject()
+  envVars?: Record<string, string>;
 
   @ApiPropertyOptional({ example: { project: 'updated' } })
   @IsOptional()
