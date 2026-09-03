@@ -36,7 +36,11 @@ export class Snapshot {
   @Index()
   status!: SnapshotStatus;
 
-  @Column({ type: 'varchar', nullable: true })
+  // Explicit 'uuid' (not 'varchar', and not left to infer from the TS
+  // `string` type, which would also default to varchar) to match
+  // Sandbox.id's actual column type — Postgres refuses to create a foreign
+  // key between mismatched types (varchar referencing uuid).
+  @Column({ type: 'uuid', nullable: true })
   @Index()
   sandboxId?: string;
 

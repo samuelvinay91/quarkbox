@@ -9,8 +9,9 @@ import { ApiKey } from './api-key/api-key.entity';
 import { Webhook } from './webhook/webhook.entity';
 import { RevokedToken } from './auth/revoked-token.entity';
 import { Plan } from './plan/plan.entity';
+import { AgentMemory } from './memory/memory.entity';
 
-const entities = [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, RevokedToken, Plan];
+const entities = [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, RevokedToken, Plan, AgentMemory];
 
 function buildOptions(): DataSourceOptions {
   const dbHost = process.env.DATABASE_HOST;

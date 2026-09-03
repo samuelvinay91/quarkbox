@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
   Inject,
+  forwardRef,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,7 +27,7 @@ import { RetentionService } from '../common/retention.service';
 export class ActivityController {
   constructor(
     @Inject(ActivityService) private readonly activityService: ActivityService,
-    private readonly retentionService: RetentionService,
+    @Inject(forwardRef(() => RetentionService)) private readonly retentionService: RetentionService,
   ) {}
 
   @Get()

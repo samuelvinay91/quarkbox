@@ -38,6 +38,9 @@ import { RevokedToken } from './auth/revoked-token.entity';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RetentionModule } from './common/retention.module';
 import { DeploymentAuditModule } from './common/deployment-audit.module';
+import { AgentMemory } from './memory/memory.entity';
+import { MemoryModule } from './memory/memory.module';
+import { BrowserModule } from './browser/browser.module';
 
 @Module({
   imports: [
@@ -70,7 +73,7 @@ import { DeploymentAuditModule } from './common/deployment-audit.module';
             username: config.get<string>('POSTGRES_USER', 'quarkbox'),
             password: config.get<string>('DATABASE_PASSWORD'),
             database: config.get<string>('POSTGRES_DB', 'quarkbox'),
-            entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, RevokedToken, Plan],
+            entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, RevokedToken, Plan, AgentMemory],
             synchronize: process.env.NODE_ENV !== 'production',
             logging: config.get<string>('DATABASE_LOGGING', 'false') === 'true',
             ssl: config.get<string>('DATABASE_SSL', 'true') === 'true'
@@ -83,7 +86,7 @@ import { DeploymentAuditModule } from './common/deployment-audit.module';
         return {
           type: 'better-sqlite3',
           database: 'quarkbox.db',
-          entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, RevokedToken, Plan],
+          entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, RevokedToken, Plan, AgentMemory],
           synchronize: process.env.NODE_ENV !== 'production',
           logging: false,
         };
@@ -112,6 +115,8 @@ import { DeploymentAuditModule } from './common/deployment-audit.module';
     PlanModule,
     RetentionModule,
     DeploymentAuditModule,
+    BrowserModule,
+    MemoryModule,
   ],
   providers: [
     {

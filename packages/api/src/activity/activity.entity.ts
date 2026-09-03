@@ -38,6 +38,10 @@ export enum ActivityType {
   SCHEMA_MIGRATION_RUN = 'schema.migration.run',
   RETENTION_CLEANUP = 'retention.cleanup',
   EXEC_OUTPUT_TRUNCATED = 'exec.output.truncated',
+  AGENT_MEMORY_STORED = 'agent.memory.stored',
+  AGENT_MEMORY_RECALLED = 'agent.memory.recalled',
+  AGENT_MEMORY_DELETED = 'agent.memory.deleted',
+  AGENT_MEMORY_CLEARED = 'agent.memory.cleared',
 }
 
 @Entity('activities')

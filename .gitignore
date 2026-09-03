@@ -68,3 +68,4 @@ secrets/
 .eslintcache
 quarkbox.db
 .playwright-mcp/
+.quarkbox/

@@ -64,7 +64,11 @@ export class ActivityService {
     try {
       const fs = require('fs/promises');
       const path = require('path');
-      const auditLogPath = process.env.AUDIT_LOG_PATH || '/var/log/quarkbox/audit.ndjson';
+      const isProd = process.env.NODE_ENV === 'production';
+      const defaultPath = isProd
+        ? '/var/log/quarkbox/audit.ndjson'
+        : path.resolve(process.cwd(), '.quarkbox', 'audit.ndjson');
+      const auditLogPath = process.env.AUDIT_LOG_PATH || defaultPath;
       
       // Ensure directory exists
       await fs.mkdir(path.dirname(auditLogPath), { recursive: true });

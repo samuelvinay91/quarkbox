@@ -54,14 +54,8 @@ describe('AuthService', () => {
     });
   });
 
-  describe('generateApiKey', () => {
-    it('returns unprefixed raw key', () => {
-      const { id, key } = authService.generateApiKey();
-      expect(id).toBeDefined();
-      expect(key.startsWith('qb_')).toBe(true);
-      expect(key.length).toBeGreaterThan(10);
-    });
-  });
+  // API key generation moved to ApiKeyService (test/api-key.service.spec.ts)
+  // — it's now hashed and persisted instead of being handed out and forgotten.
 
   describe('generateDevToken', () => {
     it('generates token for dev user', () => {

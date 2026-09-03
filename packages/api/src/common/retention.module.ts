@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RetentionService } from './retention.service';
 import { Activity } from '../activity/activity.entity';
@@ -8,7 +8,7 @@ import { RevokedToken } from '../auth/revoked-token.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Activity, RevokedToken]),
-    ActivityModule,
+    forwardRef(() => ActivityModule),
   ],
   providers: [RetentionService],
   exports: [RetentionService],

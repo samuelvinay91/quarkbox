@@ -206,25 +206,10 @@ export class AuthController {
     };
   }
 
-  /**
-   * Generate an API key for SDK/CLI access.
-   */
-  @UseGuards(AuthGuard('jwt'))
-  @Post('api-key')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate an API key for programmatic access' })
-  @ApiResponse({
-    status: 200,
-    schema: {
-      properties: {
-        id: { type: 'string' },
-        key: { type: 'string' },
-      },
-    },
-  })
-  generateApiKey() {
-    return this.authService.generateApiKey();
-  }
+  // API key generation/listing/revocation lives in ApiKeyController
+  // (src/api-key/api-key.controller.ts), mounted at the same 'auth/api-key'
+  // path — it delegates to the real, hashed-and-persisted ApiKeyService
+  // instead of the dead, unstorable key this controller used to hand out.
 
   @ApiBearerAuth()
   @Get('me')

@@ -8,6 +8,7 @@ import request from 'supertest';
 
 import { AuthModule } from '../src/auth/auth.module';
 import { UserModule } from '../src/user/user.module';
+import { ApiKeyModule } from '../src/api-key/api-key.module';
 import { SandboxModule } from '../src/sandbox/sandbox.module';
 import { Sandbox } from '../src/sandbox/sandbox.entity';
 import { Snapshot } from '../src/snapshot/snapshot.entity';
@@ -19,6 +20,7 @@ import { ApiKey } from '../src/api-key/api-key.entity';
 import { Webhook } from '../src/webhook/webhook.entity';
 import { Plan } from '../src/plan/plan.entity';
 import { PlanModule } from '../src/plan/plan.module';
+import { RevokedToken } from '../src/auth/revoked-token.entity';
 import { RUNTIME_PROVIDER } from '../src/runtime/runtime.interface';
 import { MockRuntimeProvider } from '../src/runtime/mock.provider';
 import { JwtStrategy } from '../src/auth/jwt.strategy';
@@ -44,12 +46,13 @@ describe('Security Regression Tests', () => {
         TypeOrmModule.forRoot({
           type: 'better-sqlite3',
           database: ':memory:',
-          entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, Plan],
+          entities: [Sandbox, Snapshot, Activity, MarketplaceTemplate, Cluster, User, ApiKey, Webhook, Plan, RevokedToken],
           synchronize: true,
           logging: false,
         }),
         AuthModule,
         UserModule,
+        ApiKeyModule,
         SandboxModule,
         PlanModule,
       ],
@@ -174,6 +177,59 @@ describe('Security Regression Tests', () => {
         .send({});
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('API-key ownership & lifecycle', () => {
+    async function registerAndGetToken(email: string): Promise<string> {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({ email, password: 'longenoughpassword123' });
+      return res.body.token;
+    }
+
+    it('generates a key without ever returning it again on list', async () => {
+      const token = await registerAndGetToken(`apikey-owner-${Date.now()}@example.com`);
+
+      const created = await request(app.getHttpServer())
+        .post('/auth/api-key')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'ci-key' });
+
+      expect(created.status).toBe(200);
+      expect(created.body.key).toMatch(/^qkb_[0-9a-f]{64}$/);
+      expect(created.body.keyPrefix).toBe(created.body.key.slice(0, 8));
+
+      const listed = await request(app.getHttpServer())
+        .get('/auth/api-key')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(listed.status).toBe(200);
+      expect(listed.body).toHaveLength(1);
+      expect(listed.body[0].id).toBe(created.body.id);
+      expect(listed.body[0]).not.toHaveProperty('key');
+      expect(listed.body[0]).not.toHaveProperty('keyHash');
+    });
+
+    it('refuses to let one user revoke another user\'s key', async () => {
+      const ownerToken = await registerAndGetToken(`apikey-a-${Date.now()}@example.com`);
+      const otherToken = await registerAndGetToken(`apikey-b-${Date.now()}@example.com`);
+
+      const created = await request(app.getHttpServer())
+        .post('/auth/api-key')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'owners-key' });
+
+      const revokeAttempt = await request(app.getHttpServer())
+        .delete(`/auth/api-key/${created.body.id}`)
+        .set('Authorization', `Bearer ${otherToken}`);
+
+      expect(revokeAttempt.status).toBe(403);
+
+      const stillListed = await request(app.getHttpServer())
+        .get('/auth/api-key')
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(stillListed.body).toHaveLength(1);
     });
   });
 

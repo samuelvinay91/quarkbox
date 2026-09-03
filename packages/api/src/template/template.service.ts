@@ -217,6 +217,32 @@ export const GOLDEN_TEMPLATES_SEED: Array<Partial<MarketplaceTemplate>> = [
     ],
     postLaunchScript: `apt-get update -qq && apt-get install -y -qq git curl python3 python3-pip nodejs npm ripgrep jq`,
   },
+  {
+    slug: 'playwright-browser-agent',
+    name: 'Playwright & Chromium Browser Sandbox',
+    category: TemplateCategory.AI_AGENTS,
+    description:
+      'Dedicated headless browser sandbox powered by Playwright and Chromium. Supports automated web scraping, full-page screenshots, DOM extraction, and CDP remote control for autonomous web agents.',
+    icon: '🌐',
+    image: 'mcr.microsoft.com/playwright:v1.49.0-noble',
+    defaultCpu: 2,
+    defaultMemory: '2g',
+    defaultDisk: '15g',
+    publisher: 'QuarkBox AI Labs',
+    isOfficial: true,
+    isVerified: true,
+    launchesCount: 3180,
+    tags: ['playwright', 'chromium', 'browser-agent', 'scraping', 'automation', 'cdp'],
+    recommendedWorkdir: '/workspace',
+    ports: [
+      { port: 9222, label: 'Chrome DevTools Protocol (CDP)', protocol: 'http', autoForward: true },
+      { port: 3000, label: 'Browser Preview / Control', protocol: 'http', autoForward: true },
+    ],
+    envVars: [
+      { key: 'PLAYWRIGHT_HEADLESS', label: 'Headless Mode', description: 'Run Chromium headless', defaultValue: 'true', required: false },
+    ],
+    postLaunchScript: `npm init -y && npm install --silent playwright`,
+  },
 ];
 
 export interface LaunchTemplateDto {
@@ -226,6 +252,7 @@ export interface LaunchTemplateDto {
   gitBranch?: string;
   customCpu?: number;
   customMemory?: string;
+  gpu?: boolean;
   userId?: string;
 }
 
@@ -375,6 +402,7 @@ export class TemplateService implements OnModuleInit {
         diskLimit: template.defaultDisk,
         ports: portsMap,
         envVars: finalEnv,
+        gpu: dto.gpu || (template.tags?.includes('cuda') || template.tags?.includes('gpu')),
         description: `Deployed from Golden Template: ${template.name}`,
         labels: {
           'quarkbox.template.slug': template.slug,

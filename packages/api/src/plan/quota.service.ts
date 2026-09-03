@@ -58,11 +58,20 @@ export class QuotaService {
     return { activeSandboxes, activeClusters };
   }
 
+  /**
+   * Gate a single sandbox creation. Cluster limits are checked separately
+   * by checkClusterCreateAllowed() — this used to also block on
+   * `activeClusters >= plan.maxClusters`, which meant every free-tier user
+   * (maxClusters: 0) was blocked from creating even a single plain sandbox,
+   * since that inequality (0 >= 0) is always true. Nothing ever called this
+   * method from cluster creation, so the check never actually gated
+   * clusters either — it just silently broke sandboxes for everyone.
+   */
   async checkCreateAllowed(
     userId: string,
     plan: Plan,
   ): Promise<{ allowed: boolean; reason?: string }> {
-    const { activeSandboxes, activeClusters } = await this.getEmpiricalUsage(userId);
+    const { activeSandboxes } = await this.getEmpiricalUsage(userId);
 
     if (activeSandboxes >= plan.maxConcurrentSandboxes) {
       return {
@@ -82,6 +91,22 @@ export class QuotaService {
         };
       }
     }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Gate creating a new cluster. Call this before provisioning anything —
+   * in particular before inserting the Cluster row, since
+   * getEmpiricalUsage()'s activeClusters count would otherwise include the
+   * very cluster being created, blocking a user's first cluster on every
+   * plan (including paid tiers) the moment its own row exists.
+   */
+  async checkClusterCreateAllowed(
+    userId: string,
+    plan: Plan,
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    const { activeClusters } = await this.getEmpiricalUsage(userId);
 
     if (activeClusters >= plan.maxClusters) {
       return {

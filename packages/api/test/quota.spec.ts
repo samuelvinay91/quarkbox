@@ -7,7 +7,6 @@ import { QuotaService } from '../src/plan/quota.service';
 import { Plan } from '../src/plan/plan.entity';
 import { Sandbox } from '../src/sandbox/sandbox.entity';
 import { Cluster } from '../src/cluster/cluster.entity';
-import { User } from '../src/user/user.entity';
 
 function createMockRepo(overrides: Record<string, any> = {}) {
   return {
@@ -81,34 +80,54 @@ describe('QuotaService', () => {
       expect(result.reason).toContain('concurrent sandbox limit');
     });
 
-    it('should reject when cluster limit is reached', async () => {
-      // free plan allows 0 clusters -> always at limit
+    it('should allow a free-tier user (maxClusters: 0) to create a plain sandbox', async () => {
+      // Regression test: this used to also check activeClusters >= plan.maxClusters,
+      // which is always true for the free plan (0 >= 0) — meaning no free-tier
+      // user could ever create a single sandbox. Sandbox creation must not be
+      // gated on cluster capacity at all.
       sandboxRepo.count = vi.fn().mockResolvedValue(0);
       clusterRepo.count = vi.fn().mockResolvedValue(0);
 
       const result = await quotaService.checkCreateAllowed('user-1', freePlan);
 
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('cluster limit');
+      expect(result.allowed).toBe(true);
     });
 
-    it('should allow when under concurrent and cluster limits', async () => {
+    it('should allow when under the concurrent sandbox limit', async () => {
       sandboxRepo.count = vi.fn().mockResolvedValue(0);
-      clusterRepo.count = vi.fn().mockResolvedValue(0);
 
       const result = await quotaService.checkCreateAllowed('user-1', proPlan);
 
       expect(result.allowed).toBe(true);
     });
+  });
 
-    it('should reject when cluster count meets pro maximum', async () => {
-      sandboxRepo.count = vi.fn().mockResolvedValue(0);
-      clusterRepo.count = vi.fn().mockResolvedValue(2);
+  describe('checkClusterCreateAllowed', () => {
+    it('should reject when cluster limit is reached', async () => {
+      // free plan allows 0 clusters -> always at limit
+      clusterRepo.count = vi.fn().mockResolvedValue(0);
 
-      const result = await quotaService.checkCreateAllowed('user-1', proPlan);
+      const result = await quotaService.checkClusterCreateAllowed('user-1', freePlan);
 
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('cluster limit');
+    });
+
+    it('should reject when cluster count meets pro maximum', async () => {
+      clusterRepo.count = vi.fn().mockResolvedValue(2);
+
+      const result = await quotaService.checkClusterCreateAllowed('user-1', proPlan);
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('cluster limit');
+    });
+
+    it('should allow when under the cluster limit', async () => {
+      clusterRepo.count = vi.fn().mockResolvedValue(1);
+
+      const result = await quotaService.checkClusterCreateAllowed('user-1', proPlan);
+
+      expect(result.allowed).toBe(true);
     });
   });
 

@@ -26,6 +26,7 @@ export interface RuntimeCreateOptions {
   network?: string;
   command?: string[];
   volumes?: Array<{ host: string; container: string; readonly?: boolean }>;
+  gpu?: boolean | { count?: number; capabilities?: string[][] };
 }
 
 export interface ExecOptions {

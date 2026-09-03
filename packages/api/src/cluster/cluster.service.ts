@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,6 +14,8 @@ import { TemplateService } from '../template/template.service';
 import { ActivityService } from '../activity/activity.service';
 import { ActivityType } from '../activity/activity.entity';
 import { WebhookService } from '../webhook/webhook.service';
+import { QuotaService } from '../plan/quota.service';
+import { User } from '../user/user.entity';
 import Dockerode from 'dockerode';
 import { ConfigService } from '@nestjs/config';
 
@@ -39,6 +42,8 @@ export class ClusterService {
     private readonly activityService: ActivityService,
     @Inject(WebhookService)
     private readonly webhookService: WebhookService,
+    @Inject(QuotaService)
+    private readonly quotaService: QuotaService,
     private readonly config?: ConfigService,
   ) {
     const socketPath =
@@ -57,6 +62,19 @@ export class ClusterService {
   }> {
     if (!dto.nodes || dto.nodes.length === 0) {
       throw new BadRequestException('Cluster must contain at least 1 node definition');
+    }
+
+    if (dto.userId) {
+      const user = await this.clusterRepo.manager.getRepository(User).findOne({
+        where: { id: dto.userId },
+      });
+      if (user) {
+        const plan = await this.quotaService.getPlanForUser(user);
+        const check = await this.quotaService.checkClusterCreateAllowed(dto.userId, plan);
+        if (!check.allowed) {
+          throw new ForbiddenException('Plan limit reached: ' + check.reason);
+        }
+      }
     }
 
     const networkName = `qb-cluster-${dto.name.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Date.now() % 10000}`;

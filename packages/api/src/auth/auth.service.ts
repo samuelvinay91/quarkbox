@@ -1,6 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { v4 as uuidv4 } from 'uuid';
 import { UserService } from '../user/user.service';
 
 export interface TokenPayload {
@@ -32,17 +31,6 @@ export class AuthService {
    */
   verifyToken(token: string): TokenPayload {
     return this.jwtService.verify<TokenPayload>(token);
-  }
-
-  /**
-   * Generate an API key for programmatic access (SDK, CLI)
-   * In production, this would be stored hashed in the database.
-   */
-  generateApiKey(): { id: string; key: string } {
-    const id = uuidv4();
-    const key = `qb_${Buffer.from(uuidv4() + uuidv4()).toString('base64url')}`;
-    this.logger.log(`Generated API key: ${id}`);
-    return { id, key };
   }
 
   /**

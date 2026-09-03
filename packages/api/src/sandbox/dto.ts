@@ -9,6 +9,7 @@ import {
   Max,
   MaxLength,
   Matches,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SandboxRuntime } from './sandbox.entity';
@@ -90,6 +91,11 @@ export class CreateSandboxDto {
   @IsOptional()
   @IsObject()
   labels?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: 'Enable NVIDIA GPU acceleration / passthrough', default: false })
+  @IsOptional()
+  @IsBoolean()
+  gpu?: boolean;
 }
 
 export class UpdateSandboxDto {

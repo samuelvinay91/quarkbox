@@ -21,7 +21,8 @@ export class RevokedToken {
   @Column({ type: 'varchar', length: 50, nullable: true })
   reason?: string;
 
-  @Column({ type: 'datetime' })
+  // No explicit `type` — see api-key.entity.ts for why 'datetime' breaks Postgres.
+  @Column()
   expiresAt!: Date;
 
   @CreateDateColumn()

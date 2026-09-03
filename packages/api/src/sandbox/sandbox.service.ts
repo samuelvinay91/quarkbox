@@ -23,6 +23,7 @@ import { validateCommand } from '../governor/security.service';
 import { QuotaService } from '../plan/quota.service';
 import { User } from '../user/user.entity';
 import { Plan } from '../plan/plan.entity';
+import { isUniqueConstraintViolation } from '../common/db-errors.util';
 
 @Injectable()
 export class SandboxService implements OnModuleInit {
@@ -104,6 +105,7 @@ export class SandboxService implements OnModuleInit {
       ports: dto.ports || {},
       envVars: dto.envVars || {},
       labels: dto.labels || {},
+      gpu: dto.gpu || false,
       status: SandboxStatus.CREATING,
       userId,
     });
@@ -111,15 +113,9 @@ export class SandboxService implements OnModuleInit {
 
     // Provision container (Check fast pre-warmed pool first)
     try {
-      let runtimeInfo = await this.poolService.claim(saved.image);
-      let isWarmBoot = false;
-
       const runtimeProvider = this.getRuntime(saved.runtime);
-
-      if (runtimeInfo) {
-        isWarmBoot = true;
-      } else {
-        runtimeInfo = await runtimeProvider.create({
+      const coldProvision = () =>
+        runtimeProvider.create({
           name: saved.id,
           image: saved.image,
           cpuLimit: saved.cpuLimit,
@@ -127,19 +123,53 @@ export class SandboxService implements OnModuleInit {
           diskLimit: saved.diskLimit,
           ports: saved.ports,
           envVars: saved.envVars,
+          gpu: saved.gpu,
           labels: {
             ...saved.labels,
             'quarkbox.sandbox.id': saved.id,
           },
         });
+
+      let runtimeInfo = await this.poolService.claim(saved.image);
+      let isWarmBoot = false;
+
+      if (runtimeInfo) {
+        isWarmBoot = true;
+      } else {
+        runtimeInfo = await coldProvision();
       }
 
-      const durationMs = Date.now() - startTime;
       saved.containerId = runtimeInfo.id;
       saved.containerIp = runtimeInfo.ip;
       saved.status = SandboxStatus.RUNNING;
       saved.lastActiveAt = new Date();
-      const result = await this.sandboxRepo.save(saved);
+
+      let result: Sandbox;
+      try {
+        result = await this.sandboxRepo.save(saved);
+      } catch (saveErr) {
+        if (!isWarmBoot || !isUniqueConstraintViolation(saveErr)) {
+          throw saveErr;
+        }
+        // Lost a race for this warm container to another concurrent claim
+        // (or a replica) between PoolService.claim()'s check and this save —
+        // the `sandboxes.containerId` unique constraint caught it. Treat it
+        // exactly like a pool-miss: clear the conflicting fields and cold-
+        // provision instead, rather than failing the request.
+        this.logger.warn(
+          `Warm-pool container ${runtimeInfo.id.slice(0, 12)} was claimed concurrently; falling back to cold provision for sandbox "${saved.name}"`,
+        );
+        isWarmBoot = false;
+        saved.containerId = undefined;
+        saved.containerIp = undefined;
+
+        runtimeInfo = await coldProvision();
+        saved.containerId = runtimeInfo.id;
+        saved.containerIp = runtimeInfo.ip;
+        result = await this.sandboxRepo.save(saved);
+      }
+
+      const durationMs = Date.now() - startTime;
 
       await this.activityService.record({
         type: ActivityType.SANDBOX_CREATED,

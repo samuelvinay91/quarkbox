@@ -6,11 +6,14 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Not, IsNull, Repository } from 'typeorm';
 import {
   RuntimeProvider,
   RUNTIME_PROVIDER,
   RuntimeInfo,
 } from '../runtime/runtime.interface';
+import { Sandbox } from '../sandbox/sandbox.entity';
 
 interface PoolConfig {
   image: string;
@@ -50,6 +53,8 @@ export class PoolService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(RUNTIME_PROVIDER)
     private readonly runtime: RuntimeProvider,
+    @InjectRepository(Sandbox)
+    private readonly sandboxRepo: Repository<Sandbox>,
     private readonly config?: ConfigService,
   ) {}
 
@@ -80,30 +85,52 @@ export class PoolService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private readonly claimedIds = new Set<string>();
+  /**
+   * Container IDs still labeled `quarkbox.pool=true` in the runtime never lose
+   * that label once claimed (Docker labels are immutable post-creation), so
+   * the runtime's own container listing can't tell a truly-idle warm
+   * container apart from one that's already been handed to a live Sandbox.
+   * Postgres — already the durable, transactional record of sandbox
+   * ownership — is the single source of truth for "claimed" instead: any
+   * containerId already attached to a Sandbox row is excluded from both
+   * claim candidates and replenishment-deficit accounting. This also makes
+   * claiming safe across horizontally-scaled API replicas and survives a
+   * process restart, neither of which an in-memory Set could offer.
+   */
+  private async getClaimedContainerIds(): Promise<Set<string>> {
+    const rows = await this.sandboxRepo.find({
+      where: { containerId: Not(IsNull()) },
+      select: { containerId: true },
+    });
+    return new Set(rows.map((r) => r.containerId as string));
+  }
 
   /**
    * Attempt to claim a pre-warmed container from the standby pool.
-   * Uses an atomic in-memory mutex to prevent concurrent double-claiming race conditions.
-   * If available, returns the container info in <40ms.
+   * If available, returns the container info in <40ms. A concurrent claim of
+   * the same candidate by another request/replica is still possible in the
+   * gap between this check and the caller's own save — that's resolved by
+   * the `sandboxes.containerId` unique constraint, not here: the loser of
+   * that race gets a unique-violation error and falls back to a cold
+   * provision (see SandboxService.create).
    */
   async claim(image: string): Promise<RuntimeInfo | null> {
     try {
-      const warmContainers = await this.runtime.list({
-        'quarkbox.pool': 'true',
-        'quarkbox.pool.image': image,
-      });
+      const [warmContainers, claimedIds] = await Promise.all([
+        this.runtime.list({
+          'quarkbox.pool': 'true',
+          'quarkbox.pool.image': image,
+        }),
+        this.getClaimedContainerIds(),
+      ]);
 
-      // Filter out any containers currently locked in-flight
-      const available = warmContainers.filter((c) => !this.claimedIds.has(c.id));
+      const available = warmContainers.filter((c) => !claimedIds.has(c.id));
 
       if (available.length === 0) {
         return null;
       }
 
-      // Atomically lock the first available candidate
       const candidate = available[0];
-      this.claimedIds.add(candidate.id);
 
       this.logger.log(
         `⚡ Ultra-fast claim: using warm standby container ${candidate.id.slice(0, 12)} for ${image}`,
@@ -128,6 +155,7 @@ export class PoolService implements OnModuleInit, OnModuleDestroy {
     Array<{ image: string; target: number; warm: number }>
   > {
     const results: Array<{ image: string; target: number; warm: number }> = [];
+    const claimedIds = await this.getClaimedContainerIds();
 
     for (const pool of this.targetPools) {
       try {
@@ -138,7 +166,7 @@ export class PoolService implements OnModuleInit, OnModuleDestroy {
         results.push({
           image: pool.image,
           target: pool.targetSize,
-          warm: warm.length,
+          warm: warm.filter((c) => !claimedIds.has(c.id)).length,
         });
       } catch {
         results.push({
@@ -163,13 +191,16 @@ export class PoolService implements OnModuleInit, OnModuleDestroy {
       const isHealthy = await this.runtime.healthCheck();
       if (!isHealthy) return;
 
+      const claimedIds = await this.getClaimedContainerIds();
+
       for (const pool of this.targetPools) {
         const existing = await this.runtime.list({
           'quarkbox.pool': 'true',
           'quarkbox.pool.image': pool.image,
         });
+        const unclaimed = existing.filter((c) => !claimedIds.has(c.id));
 
-        const deficit = pool.targetSize - existing.length;
+        const deficit = pool.targetSize - unclaimed.length;
         if (deficit > 0) {
           this.logger.log(
             `Replenishing pool for ${pool.image} (need +${deficit} warm containers)...`,

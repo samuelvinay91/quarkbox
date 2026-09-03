@@ -2,6 +2,7 @@ import './tracing';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -10,6 +11,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
+
+  // This Nest version doesn't auto-detect a WebSocket driver — without this,
+  // TerminalGateway (socket.io-based) fails to bind at listen time.
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Global prefix
   app.setGlobalPrefix('api');

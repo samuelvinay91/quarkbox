@@ -26,13 +26,19 @@ export class ApiKey {
   @JoinColumn({ name: 'userId' })
   user!: User;
 
-  @Column({ type: 'varchar' })
+  // Explicit 'uuid' to match User.id's actual column type — see
+  // snapshot.entity.ts's sandboxId for why this can't be 'varchar' or inferred.
+  @Column({ type: 'uuid' })
   userId!: string;
 
-  @Column({ type: 'datetime', nullable: true })
+  // No explicit `type` — let TypeORM infer per-dialect from the TS `Date`
+  // type (postgres: timestamp, sqlite: datetime). A hardcoded 'datetime'
+  // here makes DataSource.initialize() throw DataTypeNotSupportedError
+  // against Postgres, unconditionally, before any query even runs.
+  @Column({ nullable: true })
   lastUsedAt?: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ nullable: true })
   expiresAt?: Date;
 
   @CreateDateColumn()

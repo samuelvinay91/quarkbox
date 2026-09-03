@@ -117,6 +117,16 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
     // Parse memory limit to bytes
     const memoryBytes = this.parseMemory(options.memoryLimit);
 
+    const deviceRequests = [];
+    if (options.gpu) {
+      const gpuOpts = typeof options.gpu === 'object' ? options.gpu : {} as any;
+      deviceRequests.push({
+        Driver: 'nvidia',
+        Count: gpuOpts.count !== undefined ? gpuOpts.count : -1,
+        Capabilities: gpuOpts.capabilities ? gpuOpts.capabilities : [['gpu']],
+      });
+    }
+
     // Create container
     const container = await this.docker.createContainer({
       name: `quarkbox-${options.name}`,
@@ -142,6 +152,7 @@ export class DockerProvider implements RuntimeProvider, OnModuleInit {
           'metadata.google.internal:0.0.0.0', // GCP Metadata Domain
           '100.100.100.200:0.0.0.0', // Alibaba Cloud Metadata
         ],
+        DeviceRequests: deviceRequests.length > 0 ? deviceRequests : undefined,
       },
       Tty: true,
       OpenStdin: true,

@@ -131,6 +131,66 @@ describe('QuarkBox Enterprise E2E Test Suite', () => {
     expect(elapsed).toBeLessThan(100); // Sub-100ms claim
   });
 
+  it('2b. should keep replenishing after every warm container has been claimed (regression)', async () => {
+    await poolService.replenish();
+    const before = (await poolService.getPoolStatus()).find(
+      (p) => p.image === 'python:3.12-slim',
+    );
+    expect(before).toBeDefined();
+    const target = before!.target;
+
+    // Exhaust every warm container currently reported for this image —
+    // each claimed container keeps its `quarkbox.pool=true` label forever
+    // (labels are immutable post-creation), so a naive "count containers
+    // with this label" replenishment check would see the pool as still
+    // full and never top it back up.
+    for (let i = 0; i < before!.warm; i++) {
+      const sandbox = await sandboxService.create({
+        name: `pool-drain-${i}`,
+        image: 'python:3.12-slim',
+      });
+      expect(sandbox.containerId).toBeDefined();
+    }
+
+    await poolService.replenish();
+    const after = (await poolService.getPoolStatus()).find(
+      (p) => p.image === 'python:3.12-slim',
+    );
+    expect(after!.warm).toBe(target);
+  });
+
+  it('2c. should let two concurrent creates race for one warm container without either failing (regression)', async () => {
+    // Seed exactly one warm node:20-alpine container.
+    await poolService.replenish();
+    let status = (await poolService.getPoolStatus()).find(
+      (p) => p.image === 'node:20-alpine',
+    );
+    expect(status!.warm).toBeGreaterThan(0);
+
+    // Claim down to exactly one remaining warm container for this image.
+    while (status!.warm > 1) {
+      await sandboxService.create({ name: `drain-${status!.warm}`, image: 'node:20-alpine' });
+      status = (await poolService.getPoolStatus()).find((p) => p.image === 'node:20-alpine');
+    }
+    expect(status!.warm).toBe(1);
+
+    const [a, b] = await Promise.all([
+      sandboxService.create({ name: 'racer-a', image: 'node:20-alpine' }),
+      sandboxService.create({ name: 'racer-b', image: 'node:20-alpine' }),
+    ]);
+
+    // Neither request should have failed, and no two sandboxes should ever
+    // share a containerId — the `sandboxes.containerId` unique constraint,
+    // combined with SandboxService.create()'s catch-and-cold-provision
+    // fallback, is what guarantees this under real concurrency (this test
+    // proves the code path is logically correct; MockRuntimeProvider is
+    // synchronous/in-memory, so it doesn't itself exercise real DB-level
+    // race timing).
+    expect(a.containerId).toBeDefined();
+    expect(b.containerId).toBeDefined();
+    expect(a.containerId).not.toBe(b.containerId);
+  });
+
   // ── 3. Sandbox Lifecycle State Machine ────────────────────────────
 
   it('3. should handle complete sandbox lifecycle (create -> exec -> pause -> resume -> stop)', async () => {

@@ -51,7 +51,11 @@ export class Sandbox {
   @Column({ type: 'varchar', length: 255, default: 'ubuntu:22.04' })
   image!: string;
 
+  // Unique so a warm-pool container can never be adopted by two Sandbox rows —
+  // ANSI SQL treats NULL as distinct from NULL, so this stays permissive for
+  // sandboxes that haven't been provisioned yet.
   @Column({ type: 'varchar', nullable: true })
+  @Index('IDX_sandbox_containerId_unique', { unique: true })
   containerId?: string;
 
   @Column({ type: 'varchar', nullable: true })
@@ -75,6 +79,9 @@ export class Sandbox {
   @Column({ type: 'simple-json', default: {} })
   labels!: Record<string, string>;
 
+  @Column({ type: 'boolean', default: false })
+  gpu!: boolean;
+
   @Column({ type: 'varchar', nullable: true })
   userId?: string;
 
@@ -84,6 +91,7 @@ export class Sandbox {
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  // No explicit `type` — see api-key.entity.ts for why 'datetime' breaks Postgres.
+  @Column({ nullable: true })
   lastActiveAt?: Date;
 }
