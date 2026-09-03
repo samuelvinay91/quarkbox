@@ -7,13 +7,13 @@ import { CreateWebhookDto, WEBHOOK_EVENTS } from '../src/webhook/dto';
 
 async function expectValid(dto: any, value: Record<string, any>) {
   const instance = plainToInstance(dto, value);
-  const errors = await validate(instance);
+  const errors = await validate(instance as object);
   expect(errors.length).toBe(0);
 }
 
 async function expectInvalid(dto: any, value: Record<string, any>, needle?: string) {
   const instance = plainToInstance(dto, value);
-  const errors = await validate(instance);
+  const errors = await validate(instance as object);
   expect(errors.length).toBeGreaterThan(0);
   if (needle) {
     const messages = JSON.stringify(errors.map((e) => e.constraints));

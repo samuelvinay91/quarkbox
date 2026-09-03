@@ -55,7 +55,7 @@ describe('UserService', () => {
         passwordHash: '$2b$12$hashedvaluehashvalue',
         name: 'Alice',
       });
-      expect(result.passwordHash).toBeUndefined();
+      expect((result as any).passwordHash).toBeUndefined();
       expect(result.id).toBe('u1');
       expect(result.email).toBe('a@b.com');
     });
@@ -82,7 +82,7 @@ describe('UserService', () => {
       const result = await userService.findById('u1');
 
       expect(result).toEqual({ id: 'u1', email: 'a@b.com', name: 'Alice' });
-      expect(result.passwordHash).toBeUndefined();
+      expect((result as any)?.passwordHash).toBeUndefined();
     });
 
     it('returns null when not found', async () => {
